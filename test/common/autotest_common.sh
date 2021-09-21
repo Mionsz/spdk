@@ -164,7 +164,7 @@ export PCI_BLOCK_SYNC_ON_RESET=yes
 
 # Export PYTHONPATH with addition of RPC framework. New scripts can be created
 # specific use cases for tests.
-export PYTHONPATH=$PYTHONPATH:$rootdir/scripts
+export PYTHONPATH=$PYTHONPATH:$rootdir/lib/python
 
 # Don't create Python .pyc files. When running with sudo these will be
 # created with root ownership and can cause problems when cleaning the repository.
