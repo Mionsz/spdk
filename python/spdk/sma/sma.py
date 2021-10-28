@@ -63,3 +63,28 @@ class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
             context.set_details('Method is not implemented by selected device type')
             context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         return response
+
+    @_grpc_method
+    def RemoveDevice(self, request, context):
+        response = pb2.RemoveDeviceResponse()
+        try:
+            if not request.HasField('id'):
+                raise subsystem.SubsystemException(grpc.StatusCode.INVALID_ARGUMENT,
+                                                   'Missing required field: id')
+            for subsys in self._subsystems.values():
+                try:
+                    if subsys.owns_device(request.id.value):
+                        break
+                except NotImplementedError:
+                    pass
+            else:
+                raise subsystem.SubsystemException(grpc.StatusCode.NOT_FOUND,
+                                                   'Invalid device ID')
+            subsys.remove_device(request)
+        except subsystem.SubsystemException as ex:
+            context.set_details(ex.message)
+            context.set_code(ex.code)
+        except NotImplementedError:
+            context.set_details('Method is not implemented by selected device type')
+            context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        return response
