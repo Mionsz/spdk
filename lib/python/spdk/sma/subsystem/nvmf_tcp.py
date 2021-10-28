@@ -98,3 +98,22 @@ class NvmfTcpSubsystem(Subsystem):
                                      'Failed to create the device')
         return sma_pb2.CreateDeviceResponse(id=wrap.StringValue(
                     value=f'nvmf_tcp:{params.subnqn.value}'))
+
+    @_check_transport
+    def remove_device(self, request):
+        with self._client() as client:
+            nqn = request.id.value.removeprefix('nvmf_tcp:')
+            subsystems = client.call('nvmf_get_subsystems')
+            for subsystem in subsystems:
+                if subsystem['nqn'] == nqn:
+                    result = client.call('nvmf_delete_subsystem',
+                                         {'nqn': nqn})
+                    if not result:
+                        raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                                 'Failed to remove device')
+                    break
+            else:
+                logging.info(f'Tried to remove a non-existing device: {nqn}')
+
+    def owns_device(self, id):
+        return id.startswith('nvmf_tcp')
