@@ -32,11 +32,20 @@ class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
         self._server.start()
         self._server.wait_for_termination()
 
-    def _find_device(self, name):
+    def _find_device_by_name(self, name):
         device = self._devices.get(name)
         if device is None:
             raise UnsupportedDeviceException()
         return device
+
+    def _find_device_by_id(self, id):
+        for device in self._devices.values():
+            try:
+                if device.owns_device(id):
+                    return device
+            except NotImplementedError:
+                pass
+        return None
 
     @_grpc_method
     def CreateDevice(self, request, context):
@@ -45,11 +54,31 @@ class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
             if not request.HasField('type'):
                 raise DeviceException(grpc.StatusCode.INVALID_ARGUMENT,
                                       'Missing required field: type')
-            manager = self._find_device(request.type.value)
+            manager = self._find_device_by_name(request.type.value)
             response = manager.create_device(request)
         except UnsupportedDeviceException:
             context.set_details('Invalid device type')
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+        except DeviceException as ex:
+            context.set_details(ex.message)
+            context.set_code(ex.code)
+        except NotImplementedError:
+            context.set_details('Method is not implemented by selected device type')
+            context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        return response
+
+    @_grpc_method
+    def DeleteDevice(self, request, context):
+        response = pb2.DeleteDeviceResponse()
+        try:
+            if not request.HasField('id'):
+                raise DeviceException(grpc.StatusCode.INVALID_ARGUMENT,
+                                      'Missing required field: id')
+            device = self._find_device_by_id(request.id.value)
+            if device is None:
+                raise DeviceException(grpc.StatusCode.NOT_FOUND,
+                                      'Invalid device ID')
+            device.delete_device(request)
         except DeviceException as ex:
             context.set_details(ex.message)
             context.set_code(ex.code)
