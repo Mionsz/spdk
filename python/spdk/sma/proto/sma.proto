@@ -38,6 +38,28 @@ message DeleteDeviceRequest {
 // Delete device response
 message DeleteDeviceResponse {}
 
+// Connect volume request
+message ConnectVolumeRequest {
+  // Volume type (name of the subsystem, e.g. "nvmf_tcp" for NVMe/TCP)
+  google.protobuf.StringValue type = 1;
+  // Volume GUID
+  google.protobuf.StringValue guid = 2;
+  // Subsystem-specific parameters
+  google.protobuf.Any params = 3;
+}
+
+// Connect volume response
+message ConnectVolumeResponse {}
+
+// Disconnect volume  request
+message DisconnectVolumeRequest {
+  // Volume GUID
+  google.protobuf.StringValue guid = 1;
+}
+
+// Disconnect volume response
+message DisconnectVolumeResponse {}
+
 // Attach volume request
 message AttachVolumeRequest {
   // Volume GUID
@@ -69,6 +91,15 @@ service StorageManagementAgent {
   // Deletes a device
   rpc DeleteDevice (DeleteDeviceRequest)
     returns (DeleteDeviceResponse) {}
+  // Connects a volume.  Connecting an already connected volume doesn't result
+  // in an error, but will increase its reference count.
+  rpc ConnectVolume (ConnectVolumeRequest)
+    returns (ConnectVolumeResponse) {}
+  // Disconnects a volume.  The volume will actually be disconnected once its
+  // (and related volumes attached to the same controller) reference count goes
+  // to zero.
+  rpc DisconnectVolume (DisconnectVolumeRequest)
+    returns (DisconnectVolumeResponse) {}
   // Attaches a volume to a specified device making it available through that
   // device (e.g. for NVMeoF this results in adding a namespace to an NVMeoF
   // subsystem).  The type of volume doesn't need to match the type of device
