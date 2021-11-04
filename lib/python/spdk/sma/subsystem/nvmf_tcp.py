@@ -170,5 +170,29 @@ class NvmfTcpSubsystem(Subsystem):
             raise SubsystemException(grpc.StatusCode.INTERNAL,
                                      'Failed to connect the controller')
 
+    @_check_transport
+    def disconnect_controller(self, request):
+        try:
+            name = request.id.value.removeprefix('nvmf_tcp:')
+            with self._client() as client:
+                controllers = client.call('bdev_nvme_get_controllers')
+                for controller in controllers:
+                    if controller['name'] == name:
+                        result = client.call('bdev_nvme_detach_controller',
+                                             {'name': name})
+                        if not result:
+                            raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                                     'Failed to disconnect controller')
+                        break
+                else:
+                    logging.info(f'Tried to disconnect non-existing controller: {name}')
+        except JSONRPCException:
+            # TODO: parse the exception's error
+            raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                     'Failed to disconnect controller')
+
     def owns_device(self, id):
+        return id.startswith('nvmf_tcp')
+
+    def owns_controller(self, id):
         return id.startswith('nvmf_tcp')
