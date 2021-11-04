@@ -15,3 +15,15 @@ message CreateDeviceParameters {
   // Transport service ID (port number)
   google.protobuf.StringValue trsvcid = 4;
 }
+
+// Connect volume NVMe/TCP-specific parameters
+message ConnectVolumeParameters {
+  // Subsystem NQN
+  google.protobuf.StringValue subnqn = 1;
+  // Address family ("ipv4", "ipv6")
+  google.protobuf.StringValue adrfam = 2;
+  // Transport address
+  google.protobuf.StringValue traddr = 3;
+  // Transport service ID (port number)
+  google.protobuf.StringValue trsvcid = 4;
+}
