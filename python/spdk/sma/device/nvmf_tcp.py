@@ -1,5 +1,6 @@
 import grpc
 import logging
+import uuid
 from spdk.rpc.client import JSONRPCException
 from .device import DeviceManager, DeviceException
 from ..proto import sma_pb2
@@ -12,6 +13,7 @@ class NvmfTcpDeviceManager(DeviceManager):
 
     def init(self, config):
         self._has_transport = self._create_transport()
+        self._controllers = {}
 
     def _create_transport(self):
         try:
@@ -47,7 +49,23 @@ class NvmfTcpDeviceManager(DeviceManager):
             a['trtype'].lower() == 'tcp' and
             a['adrfam'].lower() == addr['adrfam'].lower() and
             a['traddr'].lower() == addr['traddr'].lower() and
-            a['trsvcid'].lower() == addr['trsvcid'].lower()), addrlist), None) is not None
+            a['trsvcid'].lower() == addr['trsvcid'].lower() and
+            a.get('subnqn') == addr.get('subnqn')), addrlist), None) is not None
+
+    def _add_volume(self, ctrlr_name, volume_guid):
+        volumes = self._controllers.get(ctrlr_name, [])
+        if volume_guid in volumes:
+            return
+        self._controllers[ctrlr_name] = volumes + [volume_guid]
+
+    def _remove_volume(self, volume_guid):
+        for ctrlr, volumes in self._controllers.items():
+            if volume_guid in volumes:
+                volumes.remove(volume_guid)
+                if len(volumes) == 0:
+                    self._controllers.pop(ctrlr)
+                return len(volumes) == 0, ctrlr
+        return False, None
 
     @_check_transport
     def create_device(self, request):
@@ -182,6 +200,84 @@ class NvmfTcpDeviceManager(DeviceManager):
             # TODO: parse the exception's error
             raise DeviceException(grpc.StatusCode.INTERNAL,
                                   'Failed to detach volume')
+
+    def connect_volume(self, request):
+        params = request.nvmf_tcp
+        try:
+            with self._client() as client:
+                addr = self._get_params(params, [
+                                ('adrfam',),
+                                ('traddr',),
+                                ('trsvcid',),
+                                ('subnqn',)])
+                existing = False
+                controllers = client.call('bdev_nvme_get_controllers')
+                for controller in controllers:
+                    for path in controller['ctrlrs']:
+                        trid = path['trid']
+                        if self._check_addr(addr, (trid,)):
+                            cname = controller['name']
+                            bdevs = client.call('bdev_get_bdevs')
+                            nbdevs = [(b['name'], b['driver_specific']['nvme'])
+                                      for b in bdevs if b.get(
+                                        'driver_specific', {}).get('nvme') is not None]
+                            names = [name for name, nvme in nbdevs if
+                                     self._check_addr(addr, [n['trid'] for n in nvme])]
+                            break
+                    else:
+                        continue
+                    existing = True
+                    break
+                else:
+                    cname = str(uuid.uuid1())
+                    names = client.call('bdev_nvme_attach_controller',
+                                        {'name': cname,
+                                         'trtype': 'tcp',
+                                         **addr})
+                    bdevs = client.call('bdev_get_bdevs')
+                # Check if the controller contains specified volume
+                for name in names:
+                    bdev = next(filter(lambda b: b['name'] == name, bdevs), None)
+                    if bdev is not None and request.volume_guid == bdev['uuid']:
+                        break
+                else:
+                    # Detach the controller only if we've just connected it
+                    if not existing:
+                        try:
+                            client.call('bdev_nvme_detach_controller',
+                                        {'name': cname})
+                        except JSONRPCException:
+                            pass
+                    raise DeviceException(grpc.StatusCode.INVALID_ARGUMENT,
+                                          'Volume couldn\'t be found')
+                self._add_volume(cname, request.volume_guid)
+                return sma_pb2.ConnectVolumeResponse()
+        except JSONRPCException:
+            # TODO: parse the exception's error
+            raise DeviceException(grpc.StatusCode.INTERNAL, 'Failed to connect the volume')
+
+    def disconnect_volume(self, request):
+        try:
+            with self._client() as client:
+                disconnect, cname = self._remove_volume(request.volume_guid)
+                if not disconnect:
+                    return cname is not None
+                controllers = client.call('bdev_nvme_get_controllers')
+                for controller in controllers:
+                    if controller['name'] == cname:
+                        result = client.call('bdev_nvme_detach_controller',
+                                             {'name': cname})
+                        if not result:
+                            raise DeviceException(grpc.StatusCode.INTERNAL,
+                                                  'Failed to disconnect the volume')
+                        return True
+                else:
+                    logging.info('Tried to disconnect volume fron non-existing ' +
+                                 f'controller: {cname}')
+            return False
+        except JSONRPCException:
+            # TODO: parse the exception's error
+            raise DeviceException(grpc.StatusCode.INTERNAL, 'Failed to disconnect the volume')
 
     def owns_device(self, id):
         return id.startswith('nvmf-tcp')

@@ -17,3 +17,15 @@ message CreateDeviceParameters {
   // List of host NQNs that are allowed to connect to the subsystem
   repeated string hosts = 5;
 }
+
+// Connect volume NVMe/TCP-specific parameters
+message ConnectVolumeParameters {
+  // Subsystem NQN
+  string subnqn = 1;
+  // Address family ("ipv4", "ipv6")
+  string adrfam = 2;
+  // Transport address
+  string traddr = 3;
+  // Transport service ID (port number)
+  string trsvcid = 4;
+}
