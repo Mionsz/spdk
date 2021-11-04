@@ -1,6 +1,7 @@
 import grpc
 from google.protobuf import wrappers_pb2 as wrap
 import logging
+import uuid
 from spdk.rpc.client import JSONRPCException
 from .subsystem import Subsystem, SubsystemException
 from ..proto import sma_pb2
@@ -58,7 +59,8 @@ class NvmfTcpSubsystem(Subsystem):
             a['trtype'].lower() == 'tcp' and
             a['adrfam'].lower() == addr['adrfam'].lower() and
             a['traddr'].lower() == addr['traddr'].lower() and
-            a['trsvcid'].lower() == addr['trsvcid'].lower()), addrlist), None) is not None
+            a['trsvcid'].lower() == addr['trsvcid'].lower() and
+            a.get('subnqn') == addr.get('subnqn')), addrlist), None) is not None
 
     @_check_transport
     def create_device(self, request):
@@ -119,6 +121,54 @@ class NvmfTcpSubsystem(Subsystem):
                     break
             else:
                 logging.info(f'Tried to remove a non-existing device: {nqn}')
+
+    @_check_transport
+    def connect_controller(self, request):
+        params = nvmf_tcp_pb2.ConnectControllerParameters()
+        if not request.params.Unpack(params):
+            raise SubsystemException(grpc.StatusCode.INVALID_ARGUMENT,
+                                     'Failed to parse controller parameters')
+        self._check_params(params, ['subnqn', 'adrfam', 'traddr', 'trsvcid'])
+        try:
+            with self._client() as client:
+                addr = self._get_params(params, [
+                                ('adrfam',),
+                                ('traddr',),
+                                ('trsvcid',),
+                                ('subnqn',)])
+
+                controllers = client.call('bdev_nvme_get_controllers')
+                for controller in controllers:
+                    for path in controller['ctrlrs']:
+                        trid = path['trid']
+                        if self._check_addr(addr, (trid,)):
+                            cname = controller['name']
+                            bdevs = client.call('bdev_get_bdevs')
+                            nbdevs = [(b['name'], b['driver_specific']['nvme'])
+                                       for b in bdevs if b.get(
+                                            'driver_specific', {}).get('nvme') is not None]
+                            names = [name for name, nvme in nbdevs if
+                                     self._check_addr(addr, [n['trid'] for n in nvme])]
+                            break
+                    else:
+                        continue
+                    break
+                else:
+                    cname = str(uuid.uuid1())
+                    names = client.call('bdev_nvme_attach_controller',
+                                        {'name': cname,
+                                         'trtype': 'tcp',
+                                         **addr})
+                    bdevs = client.call('bdev_get_bdevs')
+                response = sma_pb2.ConnectControllerResponse(
+                    controller=wrap.StringValue(value=f'nvmf_tcp:{cname}'),
+                    volumes=[wrap.StringValue(value=b['uuid'])
+                             for b in bdevs if b['name'] in names])
+                return response
+        except JSONRPCException:
+            # TODO: parse the exception's error
+            raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                     'Failed to connect the controller')
 
     def owns_device(self, id):
         return id.startswith('nvmf_tcp')
