@@ -31,3 +31,9 @@ class Subsystem:
 
     def owns_device(self, id):
         raise NotImplementedError()
+
+    def connect_volume(self, request):
+        raise NotImplementedError()
+
+    def disconnect_volume(self, request):
+        raise NotImplementedError()
