@@ -36,33 +36,27 @@ message RemoveDeviceRequest {
 // Remove device response
 message RemoveDeviceResponse {}
 
-// Connect controller request
-message ConnectControllerRequest {
-  // Controller type (name of the subsystem, e.g. "nvmf_tcp" for NVMe/TCP)
+// Connect volume request
+message ConnectVolumeRequest {
+  // Volume type (name of the subsystem, e.g. "nvmf_tcp" for NVMe/TCP)
   google.protobuf.StringValue type = 1;
+  // Volume GUID
+  google.protobuf.StringValue guid = 2;
   // Subsystem-specific parameters
-  google.protobuf.Any params = 2;
+  google.protobuf.Any params = 3;
 }
 
-// Connect controller response
-message ConnectControllerResponse {
-  // Controller handle that can be used to uniquely identify the controller
-  // within an instance of Storage Managament Agent
-  google.protobuf.StringValue controller = 1;
-  // Array of volume GUIDs that are connected to this controller.  The GUIDs are
-  // globally unique and are retrieved from the underlying protocol (e.g. NGUID
-  // for NVMeoF).
-  repeated google.protobuf.StringValue volumes = 2;
+// Connect volume response
+message ConnectVolumeResponse {}
+
+// Disconnect volume  request
+message DisconnectVolumeRequest {
+  // Volume GUID
+  google.protobuf.StringValue guid = 1;
 }
 
-// Disconnect controller request
-message DisconnectControllerRequest {
-  // Controller ID
-  google.protobuf.StringValue id = 1;
-}
-
-// Disconnect controller response
-message DisconnectControllerResponse {}
+// Disconnect volume response
+message DisconnectVolumeResponse {}
 
 // Attach volume request
 message AttachVolumeRequest {
@@ -95,13 +89,15 @@ service StorageManagementAgent {
   // Removes a device
   rpc RemoveDevice (RemoveDeviceRequest)
     returns (RemoveDeviceResponse) {}
-  // Connects to a controller presenting a number of volumes
-  rpc ConnectController (ConnectControllerRequest)
-    returns (ConnectControllerResponse) {}
-  // Disconnects from a controller making all of the volumes managed by this
-  // controller unavailable.
-  rpc DisconnectController (DisconnectControllerRequest)
-    returns (DisconnectControllerResponse) {}
+  // Connects a volume.  Connecting an already connected volume doesn't result
+  // in an error, but will increase its reference count.
+  rpc ConnectVolume (ConnectVolumeRequest)
+    returns (ConnectVolumeResponse) {}
+  // Disconnects a volume.  The volume will actually be disconnected once its
+  // (and related volumes attached to the same controller) reference count goes
+  // to zero.
+  rpc DisconnectVolume (DisconnectVolumeRequest)
+    returns (DisconnectVolumeResponse) {}
   // Attaches a volume to a specified device making it available through that
   // device (e.g. for NVMeoF this results in adding a namespace to an NVMeoF
   // subsystem).  The type of volume doesn't need to match the type of device

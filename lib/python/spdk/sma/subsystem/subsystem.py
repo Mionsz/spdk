@@ -19,10 +19,10 @@ class Subsystem:
     def remove_device(self, request):
         raise NotImplementedError()
 
-    def connect_controller(self, request):
+    def connect_volume(self, request):
         raise NotImplementedError()
 
-    def disconnect_controller(self, request):
+    def disconnect_volume(self, request):
         raise NotImplementedError()
 
     def attach_volume(self, request):
