@@ -224,6 +224,45 @@ class NvmfTcpSubsystem(Subsystem):
             raise SubsystemException(grpc.StatusCode.INTERNAL,
                                      'Failed to disconnect controller')
 
+    @_check_transport
+    def detach_volume(self, request):
+        self._check_params(request, ['volume_guid', 'device_id'])
+        nqn = request.device_id.value.removeprefix('nvmf_tcp:')
+        volume = request.volume_guid.value
+        try:
+            with self._client() as client:
+                bdevs = client.call('bdev_get_bdevs')
+                for bdev in bdevs:
+                    if bdev['uuid'] == volume:
+                        break
+                else:
+                    logging.info(f'Tried to detach non-existing volume: {volume}')
+                    return
+
+                subsystems = client.call('nvmf_get_subsystems')
+                for subsys in subsystems:
+                    if subsys['nqn'] == nqn:
+                        break
+                else:
+                    logging.info(f'Tried to detach volume: {volume} from non-existing ' +
+                                 f'device: {nqn}')
+                    return
+
+                for ns in subsys['namespaces']:
+                    if ns['name'] != bdev['name']:
+                        continue
+                    result = client.call('nvmf_subsystem_remove_ns',
+                                         {'nqn': nqn,
+                                          'nsid': ns['nsid']})
+                    if not result:
+                        raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                                 'Failed to detach volume')
+                    break
+        except JSONRPCException:
+            # TODO: parse the exception's error
+            raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                     'Failed to disconnect controller')
+
     def owns_device(self, id):
         return id.startswith('nvmf_tcp')
 
