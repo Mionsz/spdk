@@ -88,3 +88,42 @@ class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
             context.set_details('Method is not implemented by selected device type')
             context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         return response
+
+    @_grpc_method
+    def AttachVolume(self, request, context):
+        response = pb2.AttachVolumeResponse()
+        try:
+            if not request.HasField('device_id'):
+                raise subsystem.SubsystemException(grpc.StatusCode.INVALID_ARGUMENT,
+                                                   'Missing required field: device_id')
+            for subsys in self._subsystems.values():
+                try:
+                    if subsys.owns_device(request.device_id.value):
+                        break
+                except NotImplementedError:
+                    pass
+            else:
+                raise subsystem.SubsystemException(grpc.StatusCode.NOT_FOUND,
+                                                   'Invalid device ID')
+            subsys.attach_volume(request)
+        except subsystem.SubsystemException as ex:
+            context.set_details(ex.message)
+            context.set_code(ex.code)
+        except NotImplementedError:
+            context.set_details('Method is not implemented by selected device type')
+            context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        return response
+
+    @_grpc_method
+    def DetachVolume(self, request, context):
+        response = pb2.DetachVolumeResponse()
+        try:
+            for subsys in self._subsystems.values():
+                try:
+                    subsys.detach_volume(request)
+                except NotImplementedError:
+                    pass
+        except subsystem.SubsystemException as ex:
+            context.set_details(ex.message)
+            context.set_code(ex.code)
+        return response
