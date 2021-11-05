@@ -159,3 +159,20 @@ class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
             context.set_details('Method is not implemented by selected device type')
             context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         return response
+
+    @_grpc_method
+    def DetachVolume(self, request, context):
+        response = pb2.DetachVolumeResponse()
+        try:
+            for subsys in self._subsystems.values():
+                try:
+                    subsys.detach_volume(request)
+                except NotImplementedError:
+                    pass
+        except UnsupportedSubsystemException:
+            context.set_details('Invalid controller type')
+            context.set_code(grpc.StatusCode.INTERNAL)
+        except subsystem.SubsystemException as ex:
+            context.set_details(ex.message)
+            context.set_code(ex.code)
+        return response
