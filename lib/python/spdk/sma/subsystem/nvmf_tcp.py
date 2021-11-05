@@ -248,5 +248,38 @@ class NvmfTcpSubsystem(Subsystem):
             raise SubsystemException(grpc.StatusCode.INTERNAL,
                                      'Failed to disconnect the volume')
 
+    @_check_transport
+    def attach_volume(self, request):
+        self._check_params(request, ['volume_guid'])
+        nqn = request.device_id.value.removeprefix('nvmf_tcp:')
+        try:
+            with self._client() as client:
+                bdevs = client.call('bdev_get_bdevs')
+                for bdev in bdevs:
+                    if bdev['uuid'] == request.volume_guid.value:
+                        break
+                else:
+                    raise SubsystemException(grpc.StatusCode.NOT_FOUND,
+                                             'Invalid volume GUID')
+                subsystems = client.call('nvmf_get_subsystems')
+                for subsys in subsystems:
+                    if subsys['nqn'] == nqn:
+                        break
+                else:
+                    raise SubsystemException(grpc.StatusCode.NOT_FOUND,
+                                             'Invalid device ID')
+                if bdev['name'] not in [ns['name'] for ns in subsys['namespaces']]:
+                    result = client.call('nvmf_subsystem_add_ns',
+                                         {'nqn': nqn,
+                                          'namespace': {
+                                              'bdev_name': bdev['name']}})
+                    if not result:
+                        raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                                 'Failed to attach volume')
+        except JSONRPCException:
+            # TODO: parse the exception's error
+            raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                     'Failed to disconnect controller')
+
     def owns_device(self, id):
         return id.startswith('nvmf_tcp')
