@@ -12,6 +12,8 @@ import "google/protobuf/wrappers.proto";
 
 package sma;
 
+option go_package = "spdk.io/sma";
+
 // Create device request
 message CreateDeviceRequest {
   // Device type (name of the subsystem, e.g. "nvmf-tcp" for NVMe/TCP)
