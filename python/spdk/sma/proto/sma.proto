@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+import "nvme.proto";
+import "nvmf_tcp.proto";
+
+// This file provides the generic definitions for the Storage Management Agent
+// gRPC calls.  All of the methods are supposed to be idempotent.  Errors are
+// reported as standard gRPC status codes.
+
+package sma;
+
+// Create device request
+message CreateDeviceRequest {
+  oneof params {
+    // NVMe device parameters
+    nvme.CreateDeviceParameters nvme = 1;
+    // NVMe/TCP device parameters
+    nvmf_tcp.CreateDeviceParameters nvmf_tcp = 2;
+  }
+}
+
+// Create device response
+message CreateDeviceResponse {
+  // Device handle that can be used to uniquely identify the device within an
+  // instance of Storage Management Agent
+  string id = 1;
+}
+
+// Delete device request
+message DeleteDeviceRequest {
+  // Device ID
+  string id = 1;
+}
+
+// Delete device response
+message DeleteDeviceResponse {}
+
+// Attach volume request
+message AttachVolumeRequest {
+  // Volume GUID
+  string volume_guid = 1;
+  // Device ID
+  string device_id = 2;
+}
+
+// Attach volume response
+message AttachVolumeResponse {}
+
+// Detach volume request
+message DetachVolumeRequest {
+  // Volume GUID
+  string volume_guid = 1;
+  // Device ID
+  string device_id = 2;
+}
+
+// Detach volume response
+message DetachVolumeResponse {}
+
+// Storage Management Agent gRPC service definition
+service StorageManagementAgent {
+  // Creates a new device.  A device is an entity that can be used to expose
+  // volumes (e.g. an NVMeoF subsystem).
+  rpc CreateDevice (CreateDeviceRequest)
+    returns (CreateDeviceResponse) {}
+  // Deletes a device
+  rpc DeleteDevice (DeleteDeviceRequest)
+    returns (DeleteDeviceResponse) {}
+  // Attaches a volume to a specified device making it available through that
+  // device (e.g. for NVMeoF this results in adding a namespace to an NVMeoF
+  // subsystem).  The type of volume doesn't need to match the type of device
+  // (e.g. it's perfectly fine to attach an NVMe/TCP volume to a virtio-blk
+  // device).
+  rpc AttachVolume (AttachVolumeRequest)
+    returns (AttachVolumeResponse) {}
+  // Detaches a volume from a device
+  rpc DetachVolume (DetachVolumeRequest)
+    returns (DetachVolumeRequest) {}
+}
