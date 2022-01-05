@@ -105,6 +105,8 @@ function usage() {
 	echo "                           Path to clang_rt.fuzzer_no_main library required."
 	echo "                           Requires setting CC and CXX to clang."
 	echo "                           (Typically /usr/lib/llvm-VER/lib/clang/VER/lib/linux/libclang_rt.fuzzer_no_main-ARCH.a)"
+	echo " --with-grpc               Build with support for gRPC orchestration"
+	echo " --without-grpc            No path required."
 	echo ""
 	echo "Environment variables:"
 	echo ""
@@ -498,6 +500,12 @@ for i in "$@"; do
 		--without-fuzzer)
 			CONFIG[FUZZER]=n
 			CONFIG[FUZZER_LIB]=
+			;;
+		--with-grpc)
+			CONFIG[GRPC]=y
+			;;
+		--without-grpc)
+			CONFIG[GRPC]=n
 			;;
 		--)
 			break
