@@ -31,35 +31,26 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-SPDK_ROOT_DIR := $(abspath $(CURDIR)/..)
+SPDK_ROOT_DIR := $(abspath $(CURDIR)/../..)
 include $(SPDK_ROOT_DIR)/mk/spdk.common.mk
-include $(SPDK_ROOT_DIR)/mk/spdk.lib_deps.mk
 
-DIRS-y += bdev blob blobfs conf dma accel event json jsonrpc \
-          log lvol rpc sock thread trace util nvme vmd nvmf scsi \
-          ioat ut_mock iscsi notify init trace_parser python
-ifeq ($(OS),Linux)
-DIRS-y += nbd ftl
+define generate_protobuf
+$(1)/%_pb2.py $(1)/%_pb2_grpc.py: $(1)/%.proto
+	$(Q)python3 -m grpc_tools.protoc -I $(1) --python_out=$(1) \
+		--grpc_python_out=$(1) --proto_path=$(1) $$^
+endef
+
+ifeq ($(CONFIG_GRPC),y)
+protodirs = spdk/sma/proto
+protodefs = $(foreach protodir,$(protodirs),$(wildcard $(protodir)/*.proto))
+protopy = $(foreach proto,$(basename $(protodefs)),$(addprefix $(proto),_pb2.py _pb2_grpc.py))
 endif
 
-DIRS-$(CONFIG_OCF) += env_ocf
-DIRS-$(CONFIG_IDXD) += idxd
-DIRS-$(CONFIG_VHOST) += vhost
-DIRS-$(CONFIG_VIRTIO) += virtio
-DIRS-$(CONFIG_REDUCE) += reduce
-DIRS-$(CONFIG_RDMA) += rdma
-DIRS-$(CONFIG_VFIO_USER) += vfio_user
+all: $(protopy)
 
-# If CONFIG_ENV is pointing at a directory in lib, build it.
-# Out-of-tree env implementations must be built separately by the user.
-ENV_NAME := $(notdir $(CONFIG_ENV))
-ifeq ($(abspath $(CONFIG_ENV)),$(SPDK_ROOT_DIR)/lib/$(ENV_NAME))
-DIRS-y += $(ENV_NAME)
-endif
+clean:
+	$(Q)$(RM) $(protopy)
 
-.PHONY: all clean $(DIRS-y)
+$(foreach protodir,$(protodirs),$(eval $(call generate_protobuf,$(protodir))))
 
-all: $(DIRS-y)
-clean: $(DIRS-y)
-
-include $(SPDK_ROOT_DIR)/mk/spdk.subdirs.mk
+.PHONY: all clean
