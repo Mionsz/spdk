@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/wrappers.proto";
+
+// This file provides the generic defitions for the Storage Management Agent
+// gRPC calls.  All of the methods are supposed to be idempotent.  All of the
+// primitive types are wrapped using the wrappers.proto to allow for distinction
+// between missing and default values.  Parameters specific to a subsystem are
+// wrapped in a google.protobuf.Any object and are defined in that subsystem's
+// proto definition.  Errors are reported as standard gRPC status codes.
+
+package sma;
+
+// Create device request
+message CreateDeviceRequest {
+  // Device type (name of the subsystem, e.g. "nvmf_tcp" for NVMe/TCP)
+  google.protobuf.StringValue type = 1;
+  // Subsystem-specific parameters
+  google.protobuf.Any params = 2;
+}
+
+// Create device response
+message CreateDeviceResponse {
+  // Device handle that can be used to uniquely identify the device within an
+  // instance of Storage Managament Agent
+  google.protobuf.StringValue id = 1;
+}
+
+// Remove device request
+message RemoveDeviceRequest {
+  // Device ID
+  google.protobuf.StringValue id = 1;
+}
+
+// Remove device response
+message RemoveDeviceResponse {}
+
+// Connect controller request
+message ConnectControllerRequest {
+  // Controller type (name of the subsystem, e.g. "nvmf_tcp" for NVMe/TCP)
+  google.protobuf.StringValue type = 1;
+  // Subsystem-specific parameters
+  google.protobuf.Any params = 2;
+}
+
+// Connect controller response
+message ConnectControllerResponse {
+  // Controller handle that can be used to uniquely identify the controller
+  // within an instance of Storage Managament Agent
+  google.protobuf.StringValue controller = 1;
+  // Array of volume GUIDs that are connected to this controller.  The GUIDs are
+  // globally unique and are retrieved from the underlying protocol (e.g. NGUID
+  // for NVMeoF).
+  repeated google.protobuf.StringValue volumes = 2;
+}
+
+// Disconnect controller request
+message DisconnectControllerRequest {
+  // Controller ID
+  google.protobuf.StringValue id = 1;
+}
+
+// Disconnect controller response
+message DisconnectControllerResponse {}
+
+// Attach volume request
+message AttachVolumeRequest {
+  // Volume GUID
+  google.protobuf.StringValue volume_guid = 1;
+  // Device ID
+  google.protobuf.StringValue device_id = 2;
+}
+
+// Attach volume response
+message AttachVolumeResponse {}
+
+// Detach volume request
+message DetachVolumeRequest {
+  // Volume GUID
+  google.protobuf.StringValue volume_guid = 1;
+  // Device ID
+  google.protobuf.StringValue device_id = 2;
+}
+
+// Detach volume response
+message DetachVolumeResponse {}
+
+// Storage Management Agent gRPC service definition
+service StorageManagementAgent {
+  // Creates a new device.  A device is an entitiy that can be used to expose
+  // volumes (e.g. an NVMeoF subsystem).
+  rpc CreateDevice (CreateDeviceRequest)
+    returns (CreateDeviceResponse) {}
+  // Removes a device
+  rpc RemoveDevice (RemoveDeviceRequest)
+    returns (RemoveDeviceResponse) {}
+  // Connects to a controller presenting a number of volumes
+  rpc ConnectController (ConnectControllerRequest)
+    returns (ConnectControllerResponse) {}
+  // Disconnects from a controller making all of the volumes managed by this
+  // controller unavailable.
+  rpc DisconnectController (DisconnectControllerRequest)
+    returns (DisconnectControllerResponse) {}
+  // Attaches a volume to a specified device making it available through that
+  // device (e.g. for NVMeoF this results in adding a namespace to an NVMeoF
+  // subsystem).  The type of volume doesn't need to match the type of device
+  // (e.g. it's perfectly fine to attach an NVMe/TCP volume to a virtio-blk
+  // device).
+  rpc AttachVolume (AttachVolumeRequest)
+    returns (AttachVolumeResponse) {}
+  // Detaches a volume from a device
+  rpc DetachVolume (DetachVolumeRequest)
+    returns (DetachVolumeRequest) {}
+}
