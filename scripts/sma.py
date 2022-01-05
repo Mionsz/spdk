@@ -11,12 +11,27 @@ import spdk.sma as sma                      # noqa
 from spdk.rpc.client import JSONRPCClient   # noqa
 
 
-def build_client():
-    return JSONRPCClient('/var/tmp/spdk.sock')
+def parse_argv():
+    parser = ArgumentParser(description='Storage Management Agent command line interface')
+    parser.add_argument('--address', '-a', default='localhost',
+                        help='IP address to listen on')
+    parser.add_argument('--sock', '-s', default='/var/tmp/spdk.sock',
+                        help='SPDK RPC socket')
+    parser.add_argument('--port', '-p', default=50051, type=int,
+                        help='IP port to listen on')
+    return parser.parse_args()
+
+
+def get_build_client(sock):
+    def build_client():
+        return JSONRPCClient(sock)
+
+    return build_client
 
 
 if __name__ == '__main__':
+    argv = parse_argv()
     logging.basicConfig(level=os.environ.get('SMA_LOGLEVEL', 'WARNING').upper())
-    agent = sma.StorageManagementAgent(build_client, 'localhost', 50051)
+    agent = sma.StorageManagementAgent(get_build_client(argv.sock), argv.address, argv.port)
     agent.register_subsystem(sma.NvmfTcpSubsystem)
     agent.run()
