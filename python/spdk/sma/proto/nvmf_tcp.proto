@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+
+package sma.nvmf_tcp;
+
+// Create device NVMe/TCP-specific parameters
+message CreateDeviceParameters {
+  // Subsystem NQN
+  google.protobuf.StringValue subnqn = 1;
+  // Address family ("ipv4", "ipv6")
+  google.protobuf.StringValue adrfam = 2;
+  // Transport address
+  google.protobuf.StringValue traddr = 3;
+  // Transport service ID (port number)
+  google.protobuf.StringValue trsvcid = 4;
+  // List of host NQNs that are allowed to connect to the subsystem. If empty,
+  // all hosts are allowed.
+  repeated google.protobuf.StringValue hosts = 5;
+}
