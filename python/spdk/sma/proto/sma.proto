@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/wrappers.proto";
+
+// This file provides the generic definitions for the Storage Management Agent
+// gRPC calls.  All of the methods are supposed to be idempotent.  All of the
+// primitive types are wrapped using the wrappers.proto to allow for distinction
+// between missing and default values.  Parameters specific to a device are
+// wrapped in a google.protobuf.Any object and are defined in that device's
+// proto definition.  Errors are reported as standard gRPC status codes.
+
+package sma;
+
+// Create device request
+message CreateDeviceRequest {
+  // Device type (e.g. "nvmf-tcp" for NVMe/TCP)
+  google.protobuf.StringValue type = 1;
+  // Device-specific parameters
+  google.protobuf.Any params = 2;
+}
+
+// Create device response
+message CreateDeviceResponse {
+  // Device handle that can be used to uniquely identify the device within an
+  // instance of Storage Management Agent
+  google.protobuf.StringValue id = 1;
+}
+
+// Delete device request
+message DeleteDeviceRequest {
+  // Device ID
+  google.protobuf.StringValue id = 1;
+}
+
+// Delete device response
+message DeleteDeviceResponse {}
+
+// Attach volume request
+message AttachVolumeRequest {
+  // Volume GUID
+  google.protobuf.StringValue volume_guid = 1;
+  // Device ID
+  google.protobuf.StringValue device_id = 2;
+}
+
+// Attach volume response
+message AttachVolumeResponse {}
+
+// Detach volume request
+message DetachVolumeRequest {
+  // Volume GUID
+  google.protobuf.StringValue volume_guid = 1;
+  // Device ID
+  google.protobuf.StringValue device_id = 2;
+}
+
+// Detach volume response
+message DetachVolumeResponse {}
+
+// Storage Management Agent gRPC service definition
+service StorageManagementAgent {
+  // Creates a new device.  A device is an entity that can be used to expose
+  // volumes (e.g. an NVMeoF subsystem).
+  rpc CreateDevice (CreateDeviceRequest)
+    returns (CreateDeviceResponse) {}
+  // Deletes a device
+  rpc DeleteDevice (DeleteDeviceRequest)
+    returns (DeleteDeviceResponse) {}
+  // Attaches a volume to a specified device making it available through that
+  // device (e.g. for NVMeoF this results in adding a namespace to an NVMeoF
+  // subsystem).  The type of volume doesn't need to match the type of device
+  // (e.g. it's perfectly fine to attach an NVMe/TCP volume to a virtio-blk
+  // device).
+  rpc AttachVolume (AttachVolumeRequest)
+    returns (AttachVolumeResponse) {}
+  // Detaches a volume from a device
+  rpc DetachVolume (DetachVolumeRequest)
+    returns (DetachVolumeRequest) {}
+}
