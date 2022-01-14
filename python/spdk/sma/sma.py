@@ -9,10 +9,19 @@ from .proto import sma_pb2_grpc as pb2_grpc
 
 
 class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
-    def __init__(self, addr, port):
+    def __init__(self, addr, port, priv_key, cert_chain):
         self._devices = {}
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-        self._server.add_insecure_port(f'{addr}:{port}')
+        self._lock = Lock()
+        if priv_key is not None and cert_chain is not None:
+            with open(priv_key, 'rb') as f:
+                private_key = f.read()
+            with open(cert_chain, 'rb') as f:
+                certificate_chain = f.read()
+            server_credentials = grpc.ssl_server_credentials(((private_key, certificate_chain),))
+            self._server.add_secure_port(f'{addr}:{port}', server_credentials)
+        else:
+            self._server.add_insecure_port(f'{addr}:{port}')
         pb2_grpc.add_StorageManagementAgentServicer_to_server(self, self._server)
 
     def _grpc_method(f):
