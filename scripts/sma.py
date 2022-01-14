@@ -19,6 +19,10 @@ def parse_argv():
                         help='SPDK RPC socket')
     parser.add_argument('--port', '-p', default=50051, type=int,
                         help='IP port to listen on')
+    parser.add_argument('--priv-key', '-k',
+                        help='The PEM-encoded private key as a byte string')
+    parser.add_argument('--cert-chain', '-c',
+                        help='The PEM-encoded certificate chain as a byte string')
     return parser.parse_args()
 
 
@@ -32,6 +36,7 @@ def get_build_client(sock):
 if __name__ == '__main__':
     argv = parse_argv()
     logging.basicConfig(level=os.environ.get('SMA_LOGLEVEL', 'WARNING').upper())
-    agent = sma.StorageManagementAgent(get_build_client(argv.sock), argv.address, argv.port)
+    agent = sma.StorageManagementAgent(get_build_client(argv.sock), argv.address,
+                                       argv.port, argv.priv_key, argv.cert_chain)
     agent.register_subsystem(sma.NvmfTcpSubsystem)
     agent.run()
