@@ -30,9 +30,13 @@ def parse_argv():
     parser.add_argument('--socket', '-s', help='SPDK RPC socket')
     parser.add_argument('--port', '-p', type=int, help='IP port to listen on')
     parser.add_argument('--config', '-c', help='Path to config file')
+    parser.add_argument('--priv-key', help='The PEM-encoded private key as a byte string')
+    parser.add_argument('--cert-chain', help='The PEM-encoded certificate chain as a byte string')
     defaults = {'address': 'localhost',
                 'socket': '/var/tmp/spdk.sock',
-                'port': 8080}
+                'port': 8080,
+                'priv_key': None,
+                'cert_chain': None}
     # Merge the default values, config file, and the command-line
     args = vars(parser.parse_args())
     config = parse_config(args.get('config'))
@@ -115,8 +119,8 @@ if __name__ == '__main__':
 
     # Wait until the SPDK process starts responding to RPCs
     wait_for_listen(client, timeout=60.0)
-
-    agent = sma.StorageManagementAgent(config['address'], config['port'])
+    agent = sma.StorageManagementAgent(config['address'], config['port'], config['priv_key'],
+                                       config['cert_chain'])
 
     subsystems = [sma.NvmfTcpSubsystem(client)]
     subsystems += load_plugins(config.get('plugins') or [], client)
