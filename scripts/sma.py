@@ -23,6 +23,8 @@ def parse_argv():
                         help='The PEM-encoded private key as a byte string')
     parser.add_argument('--cert-chain', '-c',
                         help='The PEM-encoded certificate chain as a byte string')
+    parser.add_argument('--root-cert', '-r', default=None, dest='root_cert',
+                        help='The PEM-encoded root certificates as a byte string')
     return parser.parse_args()
 
 
@@ -37,6 +39,6 @@ if __name__ == '__main__':
     argv = parse_argv()
     logging.basicConfig(level=os.environ.get('SMA_LOGLEVEL', 'WARNING').upper())
     agent = sma.StorageManagementAgent(get_build_client(argv.sock), argv.address,
-                                       argv.port, argv.priv_key, argv.cert_chain)
+                                       argv.port, argv.root_cert, argv.priv_key, argv.cert_chain)
     agent.register_subsystem(sma.NvmfTcpSubsystem)
     agent.run()
