@@ -16,13 +16,19 @@ import spdk.sma.proto.nvmf_tcp_pb2_grpc as nvmf_tcp_pb2_grpc    # noqa
 
 
 class Client:
-    def __init__(self, addr, port, root_cert):
+    def __init__(self, addr, port, root_cert=None, priv_key=None, cert_chain=None):
         self._service = sma_pb2.DESCRIPTOR.services_by_name['StorageManagementAgent']
         self.addr = addr
         self.port = port
         if root_cert is not None:
             with open(root_cert, 'rb') as f:
-                self.creds = grpc.ssl_channel_credentials(f.read())
+                root_certificate = f.read()
+            with open(priv_key, 'rb') as f:
+                private_key = f.read()
+            with open(cert_chain, 'rb') as f:
+                certificate_chain = f.read()
+            self.creds = grpc.ssl_channel_credentials(root_certificate,
+                                                      private_key, certificate_chain)
         else:
             self.creds = None
 
@@ -55,6 +61,10 @@ def parse_argv():
                         help='IP address of SMA instance to connect to')
     parser.add_argument('--port', '-p', default=50051, type=int,
                         help='Port number of SMA instance to connect to')
+    parser.add_argument('--priv-key', '-k',
+                        help='The PEM-encoded private key as a byte string')
+    parser.add_argument('--cert-chain', '-c',
+                        help='The PEM-encoded certificate chain as a byte string')
     parser.add_argument('--root-cert', '-r',
                         help='The PEM-encoded root certificates as a byte string')
     return parser.parse_args()
@@ -62,7 +72,7 @@ def parse_argv():
 
 def main(args):
     argv = parse_argv()
-    client = Client(argv.address, argv.port, argv.root_cert)
+    client = Client(argv.address, argv.port, argv.root_cert, argv.priv_key, argv.cert_chain)
     request = json.loads(sys.stdin.read())
     result = client.call(request['method'], request.get('params', {}))
     print(json.dumps(result, indent=2))
