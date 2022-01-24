@@ -145,7 +145,7 @@ class NvmfTcpSubsystem(Subsystem):
                             cname = controller['name']
                             bdevs = client.call('bdev_get_bdevs')
                             nbdevs = [(b['name'], b['driver_specific']['nvme'])
-                                       for b in bdevs if b.get(
+                                      for b in bdevs if b.get(
                                             'driver_specific', {}).get('nvme') is not None]
                             names = [name for name, nvme in nbdevs if
                                      self._check_addr(addr, [n['trid'] for n in nvme])]
