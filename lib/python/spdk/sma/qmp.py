@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from socket import socket
+import socket
 from socket import error as SocketError
 import json
 import logging
@@ -49,9 +49,10 @@ class QMPClient():
         self._socket_timeout = s_timeout
         self._net = family
         self._path = address
-        self._s = socket(self._net, socket.SOCK_STREAM)
+        self._s = socket.socket(self._net, socket.SOCK_STREAM)
         self._exec_id = 0
         self._socketf = None
+        self.start()
 
     def _get_next_exec_id(self):
         self._exec_id += 1
@@ -59,7 +60,7 @@ class QMPClient():
 
     def _connect_socket(self):
         if not self._is_connected():
-            self._s.connect(self.__path)
+            self._s.connect(self._path)
             self._s.settimeout(self._socket_timeout)
             self._socketf = self._s.makefile(mode='rw', encoding='utf-8')
 
@@ -88,8 +89,8 @@ class QMPClient():
             except SocketError as e:
                 raise QMPError('Failed reading from socket!') from e
 
-            if data is not None:
-                raise QMPError("Connection read error! ")
+            if data is None:
+                raise QMPError('Connection read error!')
 
             self.log.debug('Received data from server: %s', data)
             try:
@@ -103,8 +104,6 @@ class QMPClient():
             return resp
 
     def _send(self, msg):
-        if not self._is_connected():
-            self.start()
         try:
             self._s.sendall(bytes(json.dumps(msg), 'utf-8'))
         except socket.timeout:
@@ -149,16 +148,20 @@ class QMPClient():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    client = QMPClient(socket.AF_INET, ('127.0.0.1', '55556'))
+    client = QMPClient(socket.AF_INET, ('127.0.0.1', 55556))
     try:
         print('Enter command to execute: [exit for quiting]')
         cmd = sys.stdin.readline()[:-1]
         while cmd != 'exit':
             print('Enter args in json form { "name1": "value1" } \
-                  or for empty pass ""')
+                  or pass empty if not needed')
             args = sys.stdin.readline()[:-1]
-            res = client.exec(cmd, json.loads(args))
-            print('Enter command to execute: [exit or ctr + D for quiting]')
+            if args == "" or args == "\"\"":
+                args = None
+            else:
+                args = json.loads(args)
+            res = client.exec(cmd, args)
+            print('Enter command to execute: [exit for quiting]')
             cmd = sys.stdin.readline()[:-1]
     except EOFError as err:
         print(str(err))
