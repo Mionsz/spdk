@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
+import importlib
 import logging
 import os
 import sys
@@ -35,10 +36,19 @@ def get_build_client(sock):
     return build_client
 
 
+def load_plugins(sma, plugins):
+    for plugin in plugins:
+        module = importlib.import_module(plugin)
+        for subsystem in getattr(module, 'subsystems', []):
+            logging.debug(f'Loading external subsystem: {plugin}.{subsystem.__name__}')
+            sma.register_subsystem(subsystem)
+
+
 if __name__ == '__main__':
     argv = parse_argv()
     logging.basicConfig(level=os.environ.get('SMA_LOGLEVEL', 'WARNING').upper())
     agent = sma.StorageManagementAgent(get_build_client(argv.sock), argv.address,
                                        argv.port, argv.root_cert, argv.priv_key, argv.cert_chain)
     agent.register_subsystem(sma.NvmfTcpSubsystem)
+    load_plugins(agent, filter(None, os.environ.get('SMA_PLUGINS', '').split(':')))
     agent.run()
