@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+
+package sma.nvmf_vfio_pci;
+
+option go_package = "spdk.io/sma/nvmf_vfio_pci";
+
+// Create device NVMe/vfio_user_pci specific parameters
+message CreateDeviceParameters {
+  // Subsystem NQN
+  google.protobuf.StringValue subnqn = 1;
+  // Transport vfio_user_pci socket path
+  google.protobuf.StringValue traddr = 2;
+}
+
+// Connect volume NVMe/vfio_user_pci specific parameters
+message ConnectVolumeParameters {
+  // Subsystem NQN
+  google.protobuf.StringValue subnqn = 1;
+  // Transport vfio_user_pci socket path
+  google.protobuf.StringValue traddr = 2;
+  // Transport vfio_user_pci PCI adress//ID
+  google.protobuf.StringValue trsvcid = 3;
+}

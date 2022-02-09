@@ -2,66 +2,16 @@ import grpc
 from google.protobuf import wrappers_pb2 as wrap
 import logging
 import uuid
+from .nvmf import Nvmf, NvmfTr, NvmeErr, NvmfException
 from spdk.rpc.client import JSONRPCException
-from .subsystem import Subsystem, SubsystemException
+from .subsystem import SubsystemException
 from ..proto import sma_pb2
 from ..proto import nvmf_tcp_pb2
 
 
-class NvmfTcpSubsystem(Subsystem):
+class NvmfTcpSubsystem(Nvmf):
     def __init__(self, client):
-        super().__init__('nvmf_tcp', client)
-        self._has_transport = False
-        self._controllers = {}
-        self.__check_transport()
-
-    def __check_transport(self):
-        try:
-            with self._client() as client:
-                # If the transport has already been created we're done
-                if self._has_transport:
-                    return True
-                transports = client.call('nvmf_get_transports')
-                for transport in transports:
-                    if transport['trtype'].lower() == 'tcp':
-                        return True
-                # TODO: take the transport params from config
-                self._has_transport = client.call('nvmf_create_transport',
-                                                  {'trtype': 'tcp'})
-                return self._has_transport
-        except JSONRPCException:
-            logging.error('Failed to query for NVMe/TCP transport')
-            return False
-
-    def _check_transport(f):
-        def wrapper(self, *args):
-            if not self.__check_transport():
-                raise SubsystemException(grpc.StatusCode.INTERNAL,
-                                         'NVMe/TCP transport is unavailable')
-            return f(self, *args)
-        return wrapper
-
-    def _get_params(self, request, params):
-        result = {}
-        for grpc_param, *rpc_param in params:
-            if request.HasField(grpc_param):
-                rpc_param = rpc_param[0] if rpc_param else grpc_param
-                result[rpc_param] = getattr(request, grpc_param).value
-        return result
-
-    def _check_params(self, request, params):
-        for param in params:
-            if not request.HasField(param):
-                raise SubsystemException(grpc.StatusCode.INVALID_ARGUMENT,
-                                         f'Missing required field: {param}')
-
-    def _check_addr(self, addr, addrlist):
-        return next(filter(lambda a: (
-            a['trtype'].lower() == 'tcp' and
-            a['adrfam'].lower() == addr['adrfam'].lower() and
-            a['traddr'].lower() == addr['traddr'].lower() and
-            a['trsvcid'].lower() == addr['trsvcid'].lower() and
-            a.get('subnqn') == addr.get('subnqn')), addrlist), None) is not None
+        super().__init__(NvmfTr.TCP_IP4, client)
 
     def _add_volume(self, ctrlr_name, volume_guid):
         volumes = self._controllers.get(ctrlr_name, [])
@@ -75,6 +25,13 @@ class NvmfTcpSubsystem(Subsystem):
                 volumes.remove(volume_guid)
                 return len(volumes) == 0, ctrlr
         return False, None
+
+    def _check_transport(f):
+        def wrapper(self, *args):
+            if not self._has_transport:
+                raise NvmfException(NvmeErr.TRANSPORT_UNAV, self._nvme_tr)
+            return f(self, *args)
+        return wrapper
 
     @_check_transport
     def create_device(self, request):
