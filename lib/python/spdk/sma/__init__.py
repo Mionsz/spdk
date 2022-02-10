@@ -5,4 +5,6 @@ import sys
 sys.path.append(os.path.dirname(__file__) + '/proto')
 
 from .sma import StorageManagementAgent             # noqa
+from .subsystem.nvmf_tcp import Nvmf
 from .subsystem.nvmf_tcp import NvmfTcpSubsystem    # noqa
+from .subsystem.nvmf_vfio import NvmfVfioSubsystem    # noqa

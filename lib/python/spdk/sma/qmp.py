@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 from typing import (Any, Dict)
+from .subsystem import subsystem
 
 log = logging.getLogger(__name__)
 
@@ -16,21 +17,20 @@ Base class for all QMPBaseClass messages
 '''
 
 
-class QMPError(Exception):
+class QMPError(subsystem.SubsystemException):
     '''
     Base Exception Class for QMPClient implementation
     '''
-    def __init__(self, description: str, error=None):
-        self.error = error
-        self.description = description
+    def __init__(self, code: int, message: str):
+        super().__init__(code, message)
 
 
 class QMPSocketError(QMPError):
     '''
     Exception Class for socket exceptions in QMPClient implementation
     '''
-    def __init__(self, description: str, error=None):
-        super().__init__(description, 'SocketError')
+    def __init__(self, code: int, message: str):
+        super().__init__(code, message)
 
 
 class QMPRequestError(QMPError):
@@ -38,9 +38,10 @@ class QMPRequestError(QMPError):
     Exception Class for handling request response errors
     '''
     def __init__(self, reply: QMPMessage):
-        error = reply.get('error', {}).get('class', 'Undefined')
-        description = reply.get('error', {}).get('desc', 'Unknown')
-        super().__init__(description, error)
+        code = -1
+        error_class = reply.get('error', {}).get('class', 'Undefined')
+        error_msg = reply.get('error', {}).get('desc', 'Unknown')
+        super().__init__(code, f'QMP error {error_class}: {error_msg}')
 
 
 class QMPClient():
@@ -160,6 +161,20 @@ class QMPClient():
         elif 'error' in result:
             raise QMPRequestError(result)
         return result
+    
+    def exec_device_add(self, socket_path: str, bus_name: str, dev_uuid: str):
+        qparams = {
+            "driver": "vfio-user-pci",
+            "x-enable-migration": "on",
+            "socket": f'{socket_path}/cntrl',
+            "bus": bus_name,
+            "id": dev_uuid
+            }
+        self.exec('device_add', qparams)
+        
+    def exec_device_del(self, dev_uuid: str):
+        qparams = { "id": dev_uuid }
+        self.exec('device_del', qparams)
 
     def exec_json(self, json_in: str) -> QMPMessage:
         cmd = json.loads(json_in)
@@ -170,11 +185,11 @@ class QMPClient():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
     with QMPClient(timeout=30) as cli:
-        print('QMP Instance Connected.')
-        print('JSON format {"cmd":"abc", "args":{"arg1": "def"} }')
+        print('QMP Instance Connected. Use JSON format:')
+        print('{"execute":"abc", "arguments":{"arg1": "def"}, "id"="UID" }')
         print('Type EXIT or pass EOF to exit.')
+
         for line in sys.stdin:
             if line == '' or line == 'EXIT':
                 break

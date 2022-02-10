@@ -2,8 +2,8 @@ import grpc
 from google.protobuf import wrappers_pb2 as wrap
 import logging
 import uuid
-from .nvmf import Nvmf, NvmfTr, NvmeErr, NvmfException
 from spdk.rpc.client import JSONRPCException
+from .nvmf import Nvmf, NvmfTr, NvmeErr, NvmfException
 from .subsystem import SubsystemException
 from ..proto import sma_pb2
 from ..proto import nvmf_tcp_pb2
@@ -11,7 +11,7 @@ from ..proto import nvmf_tcp_pb2
 
 class NvmfTcpSubsystem(Nvmf):
     def __init__(self, client):
-        super().__init__(NvmfTr.TCP_IP4, client)
+        super().__init__(client, NvmfTr.TCP_IP4)
 
     def _add_volume(self, ctrlr_name, volume_guid):
         volumes = self._controllers.get(ctrlr_name, [])

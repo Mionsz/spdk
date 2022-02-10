@@ -31,8 +31,10 @@ message CreateDeviceResponse {
 
 // Remove device request
 message RemoveDeviceRequest {
+  // Device type (name of the subsystem, e.g. "nvmf_tcp" for NVMe/TCP)
+  google.protobuf.StringValue type = 1;
   // Device ID
-  google.protobuf.StringValue id = 1;
+  google.protobuf.StringValue id = 2;
 }
 
 // Remove device response

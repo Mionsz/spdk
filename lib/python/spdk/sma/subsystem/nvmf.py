@@ -3,12 +3,16 @@ import grpc
 import logging
 from spdk.rpc.client import JSONRPCException
 from .subsystem import Subsystem, SubsystemException
+from ..proto import nvmf_tcp_pb2
+from ..proto import nvmf_vfio_pb2
+
+log = logging.getLogger(__name__)
 
 
 class NvmfTr(enum.Enum):
     TCP_IP4 = ('nvmf_tcp', 'tcp', 'ipv4', 'NVMe/TCP IPv4')
     TCP_IP6 = ('nvmf_tcp', 'tcp', 'ipv6', 'NVMe/TCP IPv6')
-    VFIOUSER = ('nvmf_vfio_pci', 'vfiouser', 'ipv4', 'NVMe/VFIOUSER PCI')
+    VFIOUSER = ('nvmf_vfio', 'vfiouser', 'ipv4', 'NVMe/VFIOUSER PCI')
 
     def get_proto_class(self):
         return eval(f'{self.get_prefix()}_pb2')
@@ -30,11 +34,6 @@ class NvmfTr(enum.Enum):
 
     def prefix_rem(self, nqn):
         return f'{self.get_prefix()}:{nqn}'
-
-    trtype = get_trtype
-    adrfam = get_adrfam
-    add = prefix_add
-    rem = prefix_rem
 
 
 class NvmeErr(enum.Enum):
@@ -62,18 +61,15 @@ class NvmeErr(enum.Enum):
     def get_desc(self):
         return f'{self}{self.get_code()}'
 
-    def get_desc(self, nvme_tr):
+    def get_full_desc(self, nvme_tr):
         return f'{self.get_desc()} for {nvme_tr.value[3]}: {self.value[1]}!'
-
-    d = get_desc
-    c = get_code
 
 
 # Example exception print:
 # NvmeErr.DEVICE_CREATE(13, internal): NVMe/TCP IPv4. Failed to create the device! ARGS: Something more to print
 class NvmfException(SubsystemException):
-    def __init__(self, nvme_err, nvme_tr, *args):
-        super().__init__(nvme_err.value[0], f'{nvme_err.d(nvme_tr)} ARGS: {args}')
+    def __init__(self, nvme_err: NvmeErr, nvme_tr, *args):
+        super().__init__(nvme_err.value[0], f'{nvme_err.get_full_desc(nvme_tr)} ARGS: {args}')
 
 
 class Nvmf(Subsystem):
@@ -85,30 +81,32 @@ class Nvmf(Subsystem):
         self._controllers = {}
         self.__check_transport()
 
-    def _get_trtype(self):
+    def get_trtype(self):
         return self._nvme_tr.get_trtype()
 
-    def _client_safe(self, nvme_err):
+    def _client_safe(self, nvme_err: NvmeErr):
         try:
-            yield self._client()
+            with self._client() as client:
+                yield client
         except JSONRPCException as ex:
             raise NvmfException(nvme_err, self._nvme_tr) from ex
 
     def __check_transport(self):
-        with self._client_safe() as client:
+        for client in self._client_safe(NvmeErr.TRANSPORT_UNAV):
             if self._has_transport:
                 return True
             transports = client.call('nvmf_get_transports')
             for transport in transports:
-                if transport['trtype'].lower() == self._get_trtype():
+                if transport['trtype'].lower() == self.get_trtype():
                     self._has_transport = True
+                    break
             else:
                 self._has_transport = client.call('nvmf_create_transport',
-                                                  {'trtype': self._get_trtype()})
+                                                  {'trtype': self.get_trtype()})
         return self._has_transport
 
     def _unpack_request(self, request):
-        params = self._subsys_proto.ConnectVolumeParameters()
+        params = self._subsys_proto.CreateDeviceParameters()
         if not request.params.Unpack(params):
             raise NvmfException(NvmeErr.PARAMS_INVALID, self._nvme_tr)
         return params
@@ -147,7 +145,7 @@ class Nvmf(Subsystem):
         subsystem = self._get_subsystem_by_nqn(client, nqn)
         if subsystem is None:
             raise NvmfException(NvmeErr.SUBSYS_NOT_FOUND, self._nvme_tr, nqn)
-        if not self._check_addr(self, addr, subsystem['listen_addresses']):
+        if not self._check_addr(addr, subsystem['listen_addresses']):
             args = {'nqn': nqn, 'listen_address': addr}
             result = client.call('nvmf_subsystem_add_listener', args)
             if not result:

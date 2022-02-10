@@ -2,9 +2,9 @@ syntax = "proto3";
 
 import "google/protobuf/wrappers.proto";
 
-package sma.nvmf_vfio_pci;
+package sma.nvmf_vfio;
 
-option go_package = "spdk.io/sma/nvmf_vfio_pci";
+option go_package = "spdk.io/sma/nvmf_vfio";
 
 // Create device NVMe/vfio_user_pci specific parameters
 message CreateDeviceParameters {

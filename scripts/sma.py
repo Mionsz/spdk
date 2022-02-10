@@ -41,4 +41,5 @@ if __name__ == '__main__':
     agent = sma.StorageManagementAgent(get_build_client(argv.sock), argv.address,
                                        argv.port, argv.root_cert, argv.priv_key, argv.cert_chain)
     agent.register_subsystem(sma.NvmfTcpSubsystem)
+    agent.register_subsystem(sma.NvmfVfioSubsystem)
     agent.run()
