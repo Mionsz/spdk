@@ -58,6 +58,12 @@ class NvmfTcpSubsystem(Subsystem):
             a['trsvcid'].lower() == addr['trsvcid'].lower() and
             a.get('subnqn') == addr.get('subnqn')), addrlist), None) is not None
 
+    def _get_tcp_controllers(self, controllers):
+        for controller in controllers:
+            if next(filter(lambda c: c.get('trid', {}).get('trtype', '').lower() == 'tcp',
+                           controller['ctrlrs']), None) is not None:
+                yield controller
+
     def _add_volume(self, ctrlr_name, volume_guid):
         volumes = self._controllers.get(ctrlr_name, [])
         if volume_guid in volumes:
@@ -72,6 +78,23 @@ class NvmfTcpSubsystem(Subsystem):
                     self._controllers.pop(ctrlr)
                 return len(volumes) == 0, ctrlr
         return False, None
+
+    def _cache_controllers(self, controllers):
+        for controller in self._get_tcp_controllers(controllers):
+            cname = controller['name']
+            # If a controller was connected outside of our knowledge (e.g. via discovery),
+            # we'll never want to disconnect it.  To prevent from doing that, add NULL GUID
+            # acting as an extra reference.
+            if cname not in self._controllers:
+                logging.debug(f'Found external controller: {cname}')
+                self._add_volume(cname, str(uuid.UUID(int=0)))
+
+        # Now go over our cached list and remove controllers that were disconnected in the
+        # meantime, without our knowledge
+        for cname in [*self._controllers.keys()]:
+            if cname not in [c['name'] for c in self._get_tcp_controllers(controllers)]:
+                logging.debug(f'Removing disconnected controller: {cname}')
+                self._controllers.pop(cname)
 
     @_check_transport
     def create_device(self, request):
@@ -148,7 +171,11 @@ class NvmfTcpSubsystem(Subsystem):
                                 ('subnqn',)])
                 existing = False
                 controllers = client.call('bdev_nvme_get_controllers')
-                for controller in controllers:
+
+                # First update the controller cache
+                self._cache_controllers(controllers)
+
+                for controller in self._get_tcp_controllers(controllers):
                     for path in controller['ctrlrs']:
                         trid = path['trid']
                         if self._check_addr(addr, (trid,)):
@@ -196,10 +223,14 @@ class NvmfTcpSubsystem(Subsystem):
     def disconnect_volume(self, request):
         try:
             with self._client() as client:
+                controllers = client.call('bdev_nvme_get_controllers')
+                # First update the controller cache
+                self._cache_controllers(controllers)
+
                 disconnect, cname = self._remove_volume(request.guid.value)
                 if not disconnect:
                     return cname is not None
-                controllers = client.call('bdev_nvme_get_controllers')
+
                 for controller in controllers:
                     if controller['name'] == cname:
                         result = client.call('bdev_nvme_detach_controller',
