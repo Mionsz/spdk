@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+
+package sma.nvmf_vfio;
+
+option go_package = "spdk.io/sma/nvmf_vfio";
+
+// Create device NVMe/vfio_user_pci specific parameters
+message CreateDeviceParameters {
+  // Subsystem NQN
+  google.protobuf.StringValue subnqn = 1;
+  // Transport vfio taget QEMU bus name (future: PCI addr)
+  google.protobuf.StringValue trbus = 2;
+  // QEMU QMP communication address (ip address)
+  google.protobuf.StringValue qtraddr = 3;
+  // QEMU QMP communication service ID (port number)
+  google.protobuf.StringValue qtrsvcid = 4;
+}
+
+// Connect volume NVMe/vfio_user_pci specific parameters
+message ConnectVolumeParameters {
+  // Subsystem NQN
+  google.protobuf.StringValue subnqn = 1;
+  // Transport vfio taget QEMU bus name (future: PCI addr)
+  google.protobuf.StringValue trbus = 2;
+  // QEMU QMP communication address (ip address)
+  google.protobuf.StringValue qtraddr = 3;
+  // QEMU QMP communication service ID (port number)
+  google.protobuf.StringValue qtrsvcid = 4;
+}
