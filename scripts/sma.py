@@ -124,7 +124,7 @@ if __name__ == '__main__':
     agent = sma.StorageManagementAgent(config['address'], config['port'], config['root_cert'],
                                        config['priv_key'], config['cert_chain'])
 
-    devices = [sma.NvmfTcpDeviceManager(client)]
+    devices = [sma.NvmfTcpDeviceManager(client), sma.NvmfVfioDeviceManager(client)]
     devices += load_plugins(config.get('plugins') or [], client)
     devices += load_plugins(filter(None, os.environ.get('SMA_PLUGINS', '').split(':')),
                             client)
