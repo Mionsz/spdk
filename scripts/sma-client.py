@@ -11,8 +11,6 @@ sys.path.append(os.path.dirname(__file__) + '/../lib/python')
 
 import spdk.sma.proto.sma_pb2 as sma_pb2                        # noqa
 import spdk.sma.proto.sma_pb2_grpc as sma_pb2_grpc              # noqa
-import spdk.sma.proto.nvmf_tcp_pb2 as nvmf_tcp_pb2              # noqa
-import spdk.sma.proto.nvmf_tcp_pb2_grpc as nvmf_tcp_pb2_grpc    # noqa
 
 
 class Client:

@@ -1,3 +1,4 @@
+from ast import Set
 import enum
 import grpc
 import logging
@@ -35,6 +36,9 @@ class NvmfTr(enum.Enum):
     def prefix_rem(self, nqn):
         return f'{self.get_prefix()}:{nqn}'
 
+    def check_prefix(self, nqn):
+        return nqn.startswith(self.get_prefix())
+
 
 class NvmeErr(enum.Enum):
     PARAMS_MISSING = (grpc.StatusCode.INVALID_ARGUMENT, 'Missing required field')
@@ -62,7 +66,7 @@ class NvmeErr(enum.Enum):
         return f'{self}{self.get_code()}'
 
     def get_full_desc(self, nvme_tr):
-        return f'{self.get_desc()} for {nvme_tr.value[3]}: {self.value[1]}!'
+        return f'{self.get_desc()} for {nvme_tr[3]}: {self.value[1]}!'
 
 
 # Example exception print:
@@ -88,6 +92,7 @@ class Nvmf(Subsystem):
         try:
             with self._client() as client:
                 yield client
+
         except JSONRPCException as ex:
             raise NvmfException(nvme_err, self._nvme_tr) from ex
 
@@ -111,12 +116,21 @@ class Nvmf(Subsystem):
             raise NvmfException(NvmeErr.PARAMS_INVALID, self._nvme_tr)
         return params
 
-    def _to_lcase_set(self, dict_in):
+    def _to_low_case_set(self, dict_in) -> set:
         return {(K, str(V).lower()) for K, V in dict_in.items()}
 
-    def _check_addr(self, addr, addrlist):
-        Addr = self._to_lcase_set(addr)
-        return bool(filter(lambda k: (Addr.issubset(self._to_lcase_set(k))), addrlist))
+    def _check_addr(self, addr, addr_list):
+        low_case = self._to_low_case_set(addr)
+        return bool(list(filter(lambda i: (low_case.issubset(
+                                self._to_low_case_set(i))), addr_list)))
+
+    def _get_params(self, request, params):
+        result = {}
+        for grpc_param, *rpc_param in params:
+            if request.HasField(grpc_param):
+                rpc_param = rpc_param[0] if rpc_param else grpc_param
+                result[rpc_param] = getattr(request, grpc_param).value
+        return result
 
     def _check_params(self, request, params):
         for param in params:
@@ -133,22 +147,23 @@ class Nvmf(Subsystem):
     def _check_create_subsystem(self, client, nqn):
         subsystem = self._get_subsystem_by_nqn(client, nqn)
         if subsystem is None:
-            args = {'allow_any_host': True}
-            args['nqn'] = nqn
+            args = {'nqn': nqn, 'allow_any_host': True}
             result = client.call('nvmf_create_subsystem', args)
             if not result:
                 raise NvmfException(NvmeErr.SUBSYS_CREATE, self._nvme_tr, args)
             return True
         return False
 
-    def _check_create_listener(self, client, nqn, addr, clean_on_fail=False):
+    def _check_listener(self, client, nqn, addr):
         subsystem = self._get_subsystem_by_nqn(client, nqn)
         if subsystem is None:
             raise NvmfException(NvmeErr.SUBSYS_NOT_FOUND, self._nvme_tr, nqn)
-        if not self._check_addr(addr, subsystem['listen_addresses']):
-            args = {'nqn': nqn, 'listen_address': addr}
-            result = client.call('nvmf_subsystem_add_listener', args)
-            if not result:
-                if clean_on_fail:
-                    client.call('nvmf_delete_subsystem', nqn)
-                raise NvmfException(NvmeErr.SUBSYS_ADD_LISTENER, self._nvme_tr, args)
+        return self._check_addr(addr, subsystem['listen_addresses'])
+
+    def _create_listener(self, client, nqn, addr, clean_on_fail=False):
+        args = {'nqn': nqn, 'listen_address': addr}
+        result = client.call('nvmf_subsystem_add_listener', args)
+        if not result:
+            if clean_on_fail:
+                client.call('nvmf_delete_subsystem', nqn)
+            raise NvmfException(NvmeErr.SUBSYS_ADD_LISTENER, self._nvme_tr, args)
