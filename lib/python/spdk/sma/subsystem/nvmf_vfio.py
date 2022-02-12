@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 import grpc
 from spdk.rpc.client import JSONRPCException
 from google.protobuf import wrappers_pb2 as wrap
@@ -30,6 +31,33 @@ class NvmfVfioSubsystem(Subsystem):
     
     def _get_trtype(self):
         return self._trtype
+
+    def _prefix_add(self, nqn):
+        return f'{self._get_name()}:{nqn}'
+
+    def _prefix_rem(self, nqn):
+        return nqn.removeprefix(f'{self._get_name()}:')
+
+    def _get_id_from_nqn(self, nqn):
+        return re.sub("[^0-9a-zA-Z]+", "0", nqn)
+
+    def _get_path_from_id(self, id):
+        return os.path.join(self._root_path, id)
+
+    def _get_path_from_nqn(self, nqn):
+        id = self._get_id_from_nqn(nqn)
+        return self._get_path_from_id(id)
+
+    def _create_socket_path(self, id):
+        socket_pth = self._get_path_from_id(id)
+        try:
+            if not os.path.exists(socket_pth):
+                os.makedirs(socket_pth)
+            return socket_pth
+        except OSError as e:
+            raise NvmfVfioException(
+                        grpc.StatusCode.INTERNAL,
+                        'Path creation failed.', socket_pth) from e
 
     def _create_transport(self):
         try:
@@ -132,7 +160,35 @@ class NvmfVfioSubsystem(Subsystem):
                     "Failed to create listener", args)
 
     def create_device(self, request):
-        raise NotImplementedError()
+        params = self._unpack_request(request)
+        self._check_params(params, ['trbus', 'qtraddr', 'qtrsvcid'])
+        nqn = params.subnqn.value
+        id = self._get_id_from_nqn(nqn)
+        traddr = self._create_socket_path(id)
+        addr = { 'traddr': traddr,
+                 'trtype': self._get_trtype() }
+
+        trbus = params.trbus.value
+        qaddress = (params.qtraddr.value, int(params.qtrsvcid.value))
+        try:
+            with self._client() as client:
+                subsys_created = self._check_create_subsystem(client, nqn)
+                if not self._check_listener(client, nqn, addr):
+                    self._create_listener(client, nqn, addr, subsys_created)
+            with QMPClient(qaddress) as qclient:
+                if not qclient.exec_device_list_properties(id):
+                    qclient.exec_device_add(addr['traddr'], trbus, id)
+        except JSONRPCException as e:
+            raise NvmfVfioException(
+                grpc.StatusCode.INTERNAL,
+                "JSONRPCException failed to create device", params) from e
+        except QMPError as e:
+            # TODO: subsys and listener cleanup
+            raise NvmfVfioException(
+                grpc.StatusCode.INTERNAL,
+                "QMPClient failed to create device", params) from e
+        return sma_pb2.CreateDeviceResponse(id=wrap.StringValue(
+                    value=self._prefix_add(nqn)))
 
     def remove_device(self, request):
         raise NotImplementedError()
