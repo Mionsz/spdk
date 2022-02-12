@@ -212,6 +212,15 @@ class QMPClient():
             return result
         return response
 
+    def device_add(self, params: Dict):
+        return self.exec('device_add', params)
+
+    def query_pci(self):
+        return self.exec('query-pci')
+
+    def device_list_properties(self, typename: str):
+        return self.exec('device-list-properties', {'typename': typename})
+
 
 def parse_argv():
     parser = ArgumentParser(description='QEMU Machine Protocol (QMP) client')
@@ -238,7 +247,7 @@ def main(args):
 #     "request": {
 #         "execute": "device-list-properties",
 #         "arguments": {
-#             "typename": "vfiouser-0-1-1"
+#             "typename": "vfiouser-1-1"
 #         }
 #     }
 # }
@@ -249,13 +258,13 @@ def main(args):
 #     "event": {
 #         "event": "DEVICE_DELETED",
 #         "data": {
-#             "device": "vfiouser-0-1-1"
+#             "device": "vfiouser-1-1"
 #         }
 #     },
 #     "request": {
 #         "execute": "device_del",
 #         "arguments": {
-#             "id": "vfiouser-0-1-1"
+#             "id": "vfiouser-1-1"
 #         }
 #     }
 # }
