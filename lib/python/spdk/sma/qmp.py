@@ -181,6 +181,14 @@ class QMPClient():
         qmp_params = {"id": dev_uuid}
         self.exec('device_del', qmp_params)
 
+    def exec_device_list_properties(self, dev_uuid: str):
+        qmp_params = {"typename": dev_uuid}
+        try:
+            self.exec('device-list-properties', qmp_params)
+        except QMPRequestError as err:
+            if err.error_class == "DeviceNotFound":
+                return None
+            raise err
 
 def parse_argv():
     parser = ArgumentParser(description='QEMU Machine Protocol (QMP) client')
