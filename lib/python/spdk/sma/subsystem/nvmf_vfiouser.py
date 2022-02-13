@@ -45,6 +45,12 @@ class NvmfVfioSubsystem(Subsystem):
             logging.error(f'Transport query NVMe/vfiouser failed')
             return False
 
+    def _prefix_rem(self, id):
+        '''
+        Remove prefix from id passed in subsystem requests
+        '''
+        return id[id.startswith(f'{self.protocol}:') and len(f'{self.protocol}:'):]
+
     def _get_id_from_nqn(self, nqn):
         return re.sub('[^0-9a-zA-Z]+', 'a', nqn)
 
@@ -91,6 +97,20 @@ class NvmfVfioSubsystem(Subsystem):
             raise SubsystemException(
                         grpc.StatusCode.INTERNAL,
                         'Path creation failed.') from e
+
+    def _remove_socket_path(self, id):
+        socket_pth = self._get_path_from_id(id)
+        bar = os.path.join(socket_pth, 'bar0')
+        cntrl = os.path.join(socket_pth, 'cntrl')
+        try:
+            if os.path.exists(bar):
+                os.remove(bar)
+            if os.path.exists(cntrl):
+                os.remove(cntrl)
+        except OSError as e:
+            raise SubsystemException(
+                        grpc.StatusCode.INTERNAL,
+                        'Path deletion failed.') from e
 
     def _check_params(self, request, params):
         for param in params:
@@ -186,6 +206,25 @@ class NvmfVfioSubsystem(Subsystem):
                 'Exception while trying to create VFIOUSER device') from e
         return sma_pb2.CreateDeviceResponse(id=wrap.StringValue(
                     value=f'{self.protocol}:{nqn}'))
+
+    def remove_device(self, request):
+        nqn = self._prefix_rem(request.id.value)
+        id = self._get_id_from_nqn(nqn)
+        try:
+            with self._client() as client:
+                if self._get_subsystem_by_nqn(client, nqn) is not None:
+                    with QMPClient() as qclient:
+                        if qclient.device_list_properties(id):
+                            qclient.device_del(id)
+                            client.call('nvmf_delete_subsystem', {'nqn': nqn})
+                            self._remove_socket_path(id)
+                        else:
+                            logging.info(f'Tried removing non-existing QMP device: {id}')
+                else:
+                    logging.info(f'Tried removing non-existing device: {nqn}')
+        except [QMPError, JSONRPCException] as e:
+            raise SubsystemException(grpc.StatusCode.INTERNAL, f'Exception while deleting device {nqn}') from e
+        return sma_pb2.RemoveDeviceResponse()
 
     def owns_device(self, id):
         return id.startswith(self.protocol)

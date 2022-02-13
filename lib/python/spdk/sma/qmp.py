@@ -189,6 +189,10 @@ class QMPClient():
     def device_add(self, params: Dict[str, object]):
         return self.exec('device_add', params)
 
+    def device_del(self, dev_uuid: str):
+        self.exec('device_del', {'id': dev_uuid})
+        return self._receive({'event': 'DEVICE_DELETED', 'data': {'device': dev_uuid}})
+
     def device_list_properties(self, dev_uuid: str):
         try:
             return self.exec('device-list-properties', {'typename': dev_uuid})
