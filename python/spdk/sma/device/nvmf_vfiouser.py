@@ -52,6 +52,12 @@ class NvmfVfioDeviceManager(DeviceManager):
             logging.error(f'Transport query NVMe/vfiouser failed')
             return False
 
+    def _remove_prefix(self, id):
+        '''
+        Remove prefix from id passed in subsystem requests
+        '''
+        return id[len(f'{self.protocol}:'):]
+
     def _get_id_from_params(self, hostid, pfid, vfid):
         '''
         Wrap device params into unique ID
@@ -89,6 +95,18 @@ class NvmfVfioDeviceManager(DeviceManager):
             return socket_pth
         except OSError as e:
             raise DeviceException(grpc.StatusCode.INTERNAL, 'Path creation failed') from e
+
+    def _remove_socket_path(self, hostid, pfid, vfid):
+        socket_pth = self._get_socket_path(hostid, pfid, vfid)
+        bar = os.path.join(socket_pth, 'bar0')
+        cntrl = os.path.join(socket_pth, 'cntrl')
+        try:
+            if os.path.exists(bar):
+                os.remove(bar)
+            if os.path.exists(cntrl):
+                os.remove(cntrl)
+        except OSError as e:
+            logging.warning(f'OSError while cleaning vfiouser sockets "{bar}" and "{cntrl}": {e}')
 
     def _check_params(self, request, params):
         for param in params:
@@ -153,6 +171,32 @@ class NvmfVfioDeviceManager(DeviceManager):
             raise DeviceException(grpc.StatusCode.INTERNAL,
                                   'Exception while trying to create VFIOUSER device') from e
         return sma_pb2.CreateDeviceResponse(id=wrap.StringValue(value=f'{self.protocol}:{nqn}'))
+
+    def delete_device(self, request):
+        nqn = self._remove_prefix(request.id.value)
+        hostid, pfid, vfid = self._get_params_from_nqn(nqn)
+        if hostid is None or pfid is None or vfid is None:
+            logging.info(f'Tried removing device with invlid NQN: {nqn}')
+            return
+        id = self._get_id_from_params(hostid, pfid, vfid)
+        host = self._hosts.get(hostid)
+        if host is None:
+            logging.info(f'Tried removing from non-existing QMP host. ID "{hostid}", NQN "{nqn}"')
+            return
+        try:
+            with self._client() as client:
+                if self._get_subsystem_by_nqn(client, nqn) is not None:
+                    with QMPClient(host['addr'], host['family']) as qclient:
+                        if qclient.device_list_properties(id):
+                            qclient.device_del(id)
+                            client.call('nvmf_delete_subsystem', {'nqn': nqn})
+                            self._remove_socket_path(hostid, pfid, vfid)
+                        else:
+                            logging.info(f'Tried removing non-existing QMP device: {id}')
+                else:
+                    logging.info(f'Tried removing non-existing device: {nqn}')
+        except (QMPError, JSONRPCException) as e:
+            raise DeviceException(grpc.StatusCode.INTERNAL, f'Failed deleting {nqn}') from e
 
     def owns_device(self, id):
         return id.startswith(self.protocol)
