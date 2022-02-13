@@ -221,6 +221,10 @@ class QMPClient():
     def device_list_properties(self, typename: str):
         return self.exec('device-list-properties', {'typename': typename})
 
+    def device_del(self, dev_uuid: str):
+        return self.exec('device_del', {'id': dev_uuid},
+                         {'event': 'DEVICE_DELETED', 'data': {'device': dev_uuid}})
+
 
 def parse_argv():
     parser = ArgumentParser(description='QEMU Machine Protocol (QMP) client')
