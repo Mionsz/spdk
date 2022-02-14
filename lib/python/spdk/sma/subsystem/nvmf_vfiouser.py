@@ -111,6 +111,13 @@ class NvmfVfioSubsystem(Subsystem):
         return bool(list(filter(lambda i: (low_case.issubset(
                                 self._to_low_case_set(i))), addr_list)))
 
+    def _get_bdev_by_uuid(self, client, uuid):
+        bdevs = client.call('bdev_get_bdevs')
+        for bdev in bdevs:
+            if bdev['uuid'] == uuid:
+                return bdev
+        return None
+
     def _get_subsystem_by_nqn(self, client, nqn):
         subsystems = client.call('nvmf_get_subsystems')
         for subsystem in subsystems:
@@ -216,6 +223,29 @@ class NvmfVfioSubsystem(Subsystem):
             raise SubsystemException(
                 grpc.StatusCode.INTERNAL,
                 "QMPClient failed to delete device") from e
+
+    def attach_volume(self, request):
+        self._check_params(request, ['volume_guid', 'device_id'])
+        nqn = self._prefix_rem(request.device_id.value)
+        try:
+            with self._client() as client:
+                bdev = self._get_bdev_by_uuid(request.volume_guid.value)
+                if bdev is None:
+                    raise SubsystemException(grpc.StatusCode.NOT_FOUND,
+                                            'Invalid volume GUID')
+                subsystem = self._get_subsystem_by_nqn(nqn)
+                if subsystem is None:
+                    raise SubsystemException(grpc.StatusCode.NOT_FOUND,
+                                            'Invalid device ID')
+                if bdev['name'] not in [ns['name'] for ns in subsystem['namespaces']]:
+                    params = {'nqn': nqn, 'namespace': {'bdev_name': bdev['name']}}
+                    result = client.call('nvmf_subsystem_add_ns', params)
+                    if not result:
+                        raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                                'Failed to attach volume')
+        except JSONRPCException as e:
+            raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                    'Failed to attach volume') from e
 
     def owns_device(self, id):
         return id.startswith(self.name)
