@@ -243,5 +243,29 @@ class NvmfVfioSubsystem(Subsystem):
         except JSONRPCException as e:
             raise SubsystemException(grpc.StatusCode.INTERNAL, 'Failed to attach volume') from e
 
+    def detach_volume(self, request):
+        self._check_params(request, ['volume_guid', 'device_id'])
+        nqn = self._prefix_rem(request.device_id.value)
+        volume = request.volume_guid.value
+        try:
+            with self._client() as client:
+                bdev = client.call('bdev_get_bdevs', {'name': volume})[0]
+                if bdev is None:
+                    logging.info(f'Tried to detach non-existing volume: {volume} nqn: {nqn}')
+                    return
+                subsystem = self._get_subsystem_by_nqn(client, nqn)
+                if subsystem is None:
+                    logging.info(f'Tried to detach non-existing volume: {volume} nqn: {nqn}')
+                    return
+                for ns in subsystem['namespaces']:
+                    if ns['name'] != bdev['name']:
+                        continue
+                    params = {'nqn': nqn, 'nsid': ns['nsid']}
+                    client.call('nvmf_subsystem_remove_ns', params)
+                    return
+        except JSONRPCException as e:
+            raise SubsystemException(grpc.StatusCode.INTERNAL,
+                                     'Failed to detach volume') from e
+
     def owns_device(self, id):
         return id.startswith(self.protocol)
