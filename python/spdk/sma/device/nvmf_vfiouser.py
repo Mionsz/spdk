@@ -125,6 +125,12 @@ class NvmfVfioDeviceManager(DeviceManager):
         except JSONRPCException:
             return None
 
+    def _get_bdev_by_guid(self, client, guid):
+        try:
+            return client.call('bdev_get_bdevs', {'name': guid})[0]
+        except JSONRPCException:
+            return None
+
     def create_device(self, request):
         params = nvme_pb2.CreateDeviceParameters()
         if not request.params.Unpack(params):
@@ -197,6 +203,25 @@ class NvmfVfioDeviceManager(DeviceManager):
                     logging.info(f'Tried removing non-existing device: {nqn}')
         except (QMPError, JSONRPCException) as e:
             raise DeviceException(grpc.StatusCode.INTERNAL, f'Failed deleting {nqn}') from e
+
+    def attach_volume(self, request):
+        self._check_params(request, ['volume_guid', 'device_id'])
+        nqn = self._remove_prefix(request.device_id.value)
+        volume = request.volume_guid.value
+        try:
+            with self._client() as client:
+                bdev = self._get_bdev_by_guid(client, volume)
+                if bdev is None:
+                    raise DeviceException(grpc.StatusCode.NOT_FOUND,
+                                          f'Invalid volume GUID "{volume}"')
+                subsystem = self._get_subsystem_by_nqn(client, nqn)
+                if subsystem is None:
+                    raise DeviceException(grpc.StatusCode.NOT_FOUND, f'Invalid device ID "{nqn}"')
+                if bdev['name'] not in [ns['name'] for ns in subsystem['namespaces']]:
+                    params = {'nqn': nqn, 'namespace': {'bdev_name': bdev['name']}}
+                    client.call('nvmf_subsystem_add_ns', params)
+        except JSONRPCException as e:
+            raise DeviceException(grpc.StatusCode.INTERNAL, 'Failed to attach volume') from e
 
     def owns_device(self, id):
         return id.startswith(self.protocol)
