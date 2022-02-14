@@ -226,5 +226,22 @@ class NvmfVfioSubsystem(Subsystem):
             raise SubsystemException(grpc.StatusCode.INTERNAL, f'Exception while deleting device {nqn}') from e
         return sma_pb2.RemoveDeviceResponse()
 
+    def attach_volume(self, request):
+        self._check_params(request, ['volume_guid', 'device_id'])
+        nqn = self._prefix_rem(request.device_id.value)
+        try:
+            with self._client() as client:
+                bdev = client.call('bdev_get_bdevs', {'name': request.volume_guid.value})[0]
+                if bdev is None:
+                    raise SubsystemException(grpc.StatusCode.NOT_FOUND, 'Invalid volume GUID')
+                subsystem = self._get_subsystem_by_nqn(client, nqn)
+                if subsystem is None:
+                    raise SubsystemException(grpc.StatusCode.NOT_FOUND, 'Invalid device ID')
+                if bdev['name'] not in [ns['name'] for ns in subsystem['namespaces']]:
+                    params = {'nqn': nqn, 'namespace': {'bdev_name': bdev['name']}}
+                    client.call('nvmf_subsystem_add_ns', params)
+        except JSONRPCException as e:
+            raise SubsystemException(grpc.StatusCode.INTERNAL, 'Failed to attach volume') from e
+
     def owns_device(self, id):
         return id.startswith(self.protocol)
