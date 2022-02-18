@@ -9,7 +9,7 @@ from ..proto import nvmf_tcp_pb2
 
 class NvmfTcpSubsystem(Subsystem):
     def __init__(self, client):
-        super().__init__('nvmf-tcp', client)
+        super().__init__('nvmf-tcp', 'nvmf-tcp', client)
 
     def init(self, config):
         self._has_transport = self._create_transport()

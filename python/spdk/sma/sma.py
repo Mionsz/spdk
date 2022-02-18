@@ -32,7 +32,7 @@ class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
         return wrapper
 
     def register_subsystem(self, subsystem):
-        self._subsystems[subsystem.name] = subsystem
+        self._subsystems[subsystem.protocol] = subsystem
 
     def run(self):
         self._server.start()

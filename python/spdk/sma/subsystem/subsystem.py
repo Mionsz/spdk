@@ -9,8 +9,9 @@ class SubsystemException(Exception):
 
 
 class Subsystem:
-    def __init__(self, name, client):
+    def __init__(self, name, protocol, client):
         self._client = client
+        self.protocol = protocol
         self.name = name
 
     def init(self, config):
