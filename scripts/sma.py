@@ -50,26 +50,40 @@ def get_build_client(sock):
     return build_client
 
 
-def register_subsystem(agent, subsystem):
-    subsystem.init(None)
-    agent.register_subsystem(subsystem)
+def register_subsystems(agent, subsystems, config):
+    for subsys_config in config.get('subsystems') or []:
+        name = subsys_config.get('name')
+        subsys = next(filter(lambda s: s.name == name, subsystems), None)
+        if subsys is None:
+            logging.error(f'Couldn\'t find subsystem: {name}')
+            sys.exit(1)
+        logging.info(f'Registering subsystem: {name}')
+        subsys.init(subsys_config.get('params'))
+        agent.register_subsystem(subsys)
 
 
-def load_plugins(agent, client, plugins):
+def load_plugins(plugins, client):
+    subsystems = []
     for plugin in plugins:
         module = importlib.import_module(plugin)
         for subsystem in getattr(module, 'subsystems', []):
             logging.debug(f'Loading external subsystem: {plugin}.{subsystem.__name__}')
-            register_subsystem(agent, subsystem(client))
+            subsystems.append(subsystem(client))
+    return subsystems
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=os.environ.get('SMA_LOGLEVEL', 'WARNING').upper())
 
     config = parse_argv()
+    client = get_build_client(config['socket'])
+
     agent = sma.StorageManagementAgent(config['address'], config['port'])
-    register_subsystem(agent, sma.NvmfTcpSubsystem(get_build_client(config['socket'])))
-    load_plugins(agent, get_build_client(config['socket']), config.get('plugins') or [])
-    load_plugins(agent, get_build_client(config['socket']),
-                 filter(None, os.environ.get('SMA_PLUGINS', '').split(':')))
+
+    subsystems = [sma.NvmfTcpSubsystem(client)]
+    subsystems += load_plugins(config.get('plugins') or [], client)
+    subsystems += load_plugins(filter(None, os.environ.get('SMA_PLUGINS', '').split(':')),
+                               client)
+    register_subsystems(agent, subsystems, config)
+
     agent.run()
