@@ -34,9 +34,11 @@ class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
     def register_subsystem(self, subsystem):
         self._subsystems[subsystem.protocol] = subsystem
 
-    def run(self):
+    def start(self):
         self._server.start()
-        self._server.wait_for_termination()
+
+    def stop(self):
+        self._server.stop(None)
 
     def _find_subsystem(self, name):
         subsys = self._subsystems.get(name)
