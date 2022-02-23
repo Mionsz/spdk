@@ -13,16 +13,19 @@ class UnsupportedSubsystemException(Exception):
 
 
 class StorageManagementAgent(pb2_grpc.StorageManagementAgentServicer):
-    def __init__(self, addr, port, priv_key, cert_chain):
+    def __init__(self, addr, port, root_cert, priv_key, cert_chain):
         self._subsystems = {}
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         self._lock = Lock()
-        if priv_key is not None and cert_chain is not None:
+        if priv_key is not None and cert_chain is not None and root_cert is not None:
             with open(priv_key, 'rb') as f:
                 private_key = f.read()
             with open(cert_chain, 'rb') as f:
                 certificate_chain = f.read()
-            server_credentials = grpc.ssl_server_credentials(((private_key, certificate_chain),))
+            with open(cert_chain, 'rb') as f:
+                root_certificate = f.read()
+            server_credentials = grpc.ssl_server_credentials(((private_key, certificate_chain),),
+                                                             root_certificate, require_client_auth=True)
             self._server.add_secure_port(f'{addr}:{port}', server_credentials)
         else:
             self._server.add_insecure_port(f'{addr}:{port}')
