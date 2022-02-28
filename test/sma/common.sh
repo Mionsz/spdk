@@ -10,3 +10,16 @@ function sma_waitforlisten() {
 	done
 	return 1
 }
+
+function qmp_waitforlisten() {
+	local qmp_addr=${1:-127.0.0.1}
+	local qmp_port=${2:-45556}
+
+	for ((i = 0; i < 5; i++)); do
+		if nc -z $qmp_addr $qmp_port; then
+			return 0
+		fi
+		sleep 1s
+	done
+	return 1
+}
