@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+
+package sma.nvme;
+
+option go_package = "spdk.io/sma/nvme";
+
+message CreateDeviceParameters {
+  // Host unique ID
+  google.protobuf.UInt32Value host_id = 1;
+  // Physical function index
+  google.protobuf.UInt32Value physical_id = 2;
+  // Virtual function index
+  google.protobuf.UInt32Value virtual_id = 3;
+}
