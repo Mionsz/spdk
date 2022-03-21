@@ -305,6 +305,13 @@ function vm_fio_socket() {
 	cat $vm_dir/fio_socket
 }
 
+function vm_qmp_port() {
+	vm_num_is_valid $1 || return 1
+	local vm_dir="$VM_DIR/$1"
+
+	cat $vm_dir/qmp_port
+}
+
 # Execute command on given VM
 # param $1 virtual machine number
 #
@@ -636,6 +643,7 @@ function vm_setup() {
 	local monitor_port=$((vm_socket_offset + 2))
 	local migration_port=$((vm_socket_offset + 3))
 	local gdbserver_socket=$((vm_socket_offset + 4))
+	local qmp_port=$((vm_socket_offset + 5))
 	local vnc_socket=$((100 + vm_num))
 	local qemu_pid_file="$vm_dir/qemu.pid"
 	local cpu_num=0
@@ -671,6 +679,7 @@ function vm_setup() {
 	[[ $os_mode == snapshot ]] && cmd+=(-snapshot)
 	[[ -n "$vm_incoming" ]] && cmd+=(-incoming "tcp:0:$migration_port")
 	cmd+=(-monitor "telnet:127.0.0.1:$monitor_port,server,nowait")
+	cmd+=(-qmp "tcp:127.0.0.1:$qmp_port,server,nowait")
 	cmd+=(-numa "node,memdev=mem")
 	cmd+=(-pidfile "$qemu_pid_file")
 	cmd+=(-serial "file:$vm_dir/serial.log")
@@ -818,6 +827,7 @@ function vm_setup() {
 	echo $ssh_socket > $vm_dir/ssh_socket
 	echo $fio_socket > $vm_dir/fio_socket
 	echo $monitor_port > $vm_dir/monitor_port
+	echo $qmp_port > $vm_dir/qmp_port
 
 	rm -f $vm_dir/migration_port
 	[[ -z $vm_incoming ]] || echo $migration_port > $vm_dir/migration_port

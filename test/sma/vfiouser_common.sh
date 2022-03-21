@@ -74,3 +74,17 @@ function get_nqn_from_params() {
 
 	echo "nqn.2016-06.io.spdk:vfiouser-${host_id}-${pfid}-${vfid}"
 }
+
+function vm_nopass_exec() {
+	vm_num_is_valid $1 || return 1
+
+	local vm_num="$1"
+	shift
+
+	ssh -o UserKnownHostsFile=/dev/null \
+		-o StrictHostKeyChecking=no \
+		-o User=root \
+		-o IdentityFile="${HOME}/.ssh/qemu_id_rsa" \
+		-p $(vm_ssh_socket $vm_num) 127.0.0.1 \
+		"$@"
+}
