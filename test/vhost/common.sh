@@ -305,6 +305,13 @@ function vm_fio_socket() {
 	cat $vm_dir/fio_socket
 }
 
+function vm_qmp_port() {
+	vm_num_is_valid $1 || return 1
+	local vm_dir="$VM_DIR/$1"
+
+	cat $vm_dir/qmp_port
+}
+
 # Execute command on given VM
 # param $1 virtual machine number
 #
@@ -519,6 +526,8 @@ function vm_setup() {
 	local guest_memory=1024
 	local queue_number=""
 	local vhost_dir
+	local pci_bridge=""
+	local type_q35=false
 	local packed=false
 	vhost_dir="$(get_vhost_dir 0)"
 	while getopts ':-:' optchar; do
@@ -539,6 +548,8 @@ function vm_setup() {
 					migrate-to=*) vm_migrate_to="${OPTARG#*=}" ;;
 					vhost-name=*) vhost_dir="$(get_vhost_dir ${OPTARG#*=})" ;;
 					spdk-boot=*) local boot_from="${OPTARG#*=}" ;;
+					pci-bridge=*) pci_bridge=${OPTARG#*=} ;;
+					type-q35) type_q35=true ;;
 					packed) packed=true ;;
 					*)
 						error "unknown argument $OPTARG"
@@ -636,6 +647,7 @@ function vm_setup() {
 	local monitor_port=$((vm_socket_offset + 2))
 	local migration_port=$((vm_socket_offset + 3))
 	local gdbserver_socket=$((vm_socket_offset + 4))
+	local qmp_port=$((vm_socket_offset + 5))
 	local vnc_socket=$((100 + vm_num))
 	local qemu_pid_file="$vm_dir/qemu.pid"
 	local cpu_num=0
@@ -671,6 +683,7 @@ function vm_setup() {
 	[[ $os_mode == snapshot ]] && cmd+=(-snapshot)
 	[[ -n "$vm_incoming" ]] && cmd+=(-incoming "tcp:0:$migration_port")
 	cmd+=(-monitor "telnet:127.0.0.1:$monitor_port,server,nowait")
+	cmd+=(-qmp "tcp:127.0.0.1:$qmp_port,server,nowait")
 	cmd+=(-numa "node,memdev=mem")
 	cmd+=(-pidfile "$qemu_pid_file")
 	cmd+=(-serial "file:$vm_dir/serial.log")
@@ -681,6 +694,17 @@ function vm_setup() {
 	if [[ -z "$boot_from" ]]; then
 		cmd+=(-drive "file=$os,if=none,id=os_disk")
 		cmd+=(-device "ide-hd,drive=os_disk,bootindex=0")
+	fi
+
+	if $type_q35; then
+		cmd+=(-machine "type=q35,kernel_irqchip=split,accel=kvm")
+		if [[ -n "$pci_bridge" ]]; then
+			cmd+=(-device "pcie-pci-bridge,id=spdk-pcie-pci")
+			cmd+=(-device "pci-bridge,bus=spdk-pcie-pci,chassis_nr=13,addr=0x5,id=$pci_bridge")
+		fi
+	elif [[ -n "$pci_bridge" ]]; then
+		error "pci-bridge requires q35 machine. aborting"
+		return 1
 	fi
 
 	if ((${#disks[@]} == 0)) && [[ $disk_type_g == virtio* ]]; then
@@ -818,6 +842,7 @@ function vm_setup() {
 	echo $ssh_socket > $vm_dir/ssh_socket
 	echo $fio_socket > $vm_dir/fio_socket
 	echo $monitor_port > $vm_dir/monitor_port
+	echo $qmp_port > $vm_dir/qmp_port
 
 	rm -f $vm_dir/migration_port
 	[[ -z $vm_incoming ]] || echo $migration_port > $vm_dir/migration_port
